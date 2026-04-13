@@ -190,6 +190,7 @@ return [
         // Authorization callback — return true to allow access, false to deny.
         // Set to null to allow all authenticated users (when using 'auth' middleware).
         // Example: fn ($request) => $request->user()?->isAdmin()
+        // Example: fn () => true
         'authorize' => null,
 
         // Path to the log files directory
