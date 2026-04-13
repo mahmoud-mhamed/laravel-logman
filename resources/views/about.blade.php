@@ -201,6 +201,33 @@
             </div>
         </div>
 
+        {{-- Storage Health --}}
+        <div class="about-section">
+            <h3>
+                <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg>
+                Storage Health
+            </h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Data files used at runtime. Files over 5 MB are automatically reset to prevent performance impact.</p>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                @foreach($storageSizes as $filename => $size)
+                    @php
+                        $sizeKb = round($size / 1024, 1);
+                        $sizeMb = round($size / 1024 / 1024, 2);
+                        $display = $size < 1024 ? $size . ' B' : ($size < 1048576 ? $sizeKb . ' KB' : $sizeMb . ' MB');
+                        $percent = min(100, ($size / (5 * 1024 * 1024)) * 100);
+                        $barColor = $percent < 50 ? 'var(--debug-text)' : ($percent < 80 ? 'var(--warning-text)' : 'var(--danger-text)');
+                    @endphp
+                    <div style="padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm);display:flex;align-items:center;gap:12px;">
+                        <code style="font-size:11px;color:var(--primary);min-width:120px;">{{ $filename }}</code>
+                        <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+                            <div style="height:100%;width:{{ max(1, $percent) }}%;background:{{ $barColor }};border-radius:3px;transition:width 0.3s;"></div>
+                        </div>
+                        <span style="font-family:var(--font-mono);font-size:11px;color:{{ $barColor }};min-width:60px;text-align:right;">{{ $display }}</span>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
         {{-- Rate Limiting & Throttling --}}
         <div class="about-section">
             <h3>

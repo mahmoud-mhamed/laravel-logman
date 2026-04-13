@@ -23,12 +23,40 @@ class MuteService
     protected bool $throttlesDirty = false;
     protected bool $shutdownRegistered = false;
 
+    /** Maximum JSON file size to read (5 MB). Files exceeding this are reset. */
+    protected const MAX_JSON_FILE_SIZE = 5 * 1024 * 1024;
+
     public function __construct()
     {
         $this->storagePath = config('logman.storage_path', storage_path('logman'));
         $this->mutesFile = $this->storagePath . '/mutes.json';
         $this->rateLimitsFile = $this->storagePath . '/rate_limits.json';
         $this->throttlesFile = $this->storagePath . '/throttles.json';
+    }
+
+    // ─── Safe File Read ──────────────────────────────────────
+
+    /**
+     * Read and decode a JSON file safely.
+     * Returns empty array if file is missing, too large, or corrupted.
+     * Resets oversized files to prevent future blocking.
+     */
+    protected function safeReadJson(string $path): array
+    {
+        if (!File::exists($path)) {
+            return [];
+        }
+
+        $size = filesize($path);
+        if ($size > self::MAX_JSON_FILE_SIZE) {
+            // File too large — reset it to prevent blocking requests
+            $this->writeFile($path, []);
+            return [];
+        }
+
+        $data = json_decode(File::get($path), true);
+
+        return is_array($data) ? $data : [];
     }
 
     // ─── Deferred Write ───────────────────────────────────────
@@ -172,12 +200,7 @@ class MuteService
             return $this->cachedMutes;
         }
 
-        if (!File::exists($this->mutesFile)) {
-            $this->cachedMutes = [];
-            return [];
-        }
-
-        $mutes = json_decode(File::get($this->mutesFile), true) ?: [];
+        $mutes = $this->safeReadJson($this->mutesFile);
 
         // Clean expired mutes
         $now = now()->toIso8601String();
@@ -283,12 +306,27 @@ class MuteService
             return $this->cachedThrottles;
         }
 
-        if (!File::exists($this->throttlesFile)) {
-            $this->cachedThrottles = [];
-            return [];
+        $throttles = $this->safeReadJson($this->throttlesFile);
+
+        // Clean expired throttles (period ended and not reset)
+        $now = now();
+        $active = array_filter($throttles, function ($t) use ($now) {
+            if (empty($t['period_start']) || empty($t['period_seconds'])) {
+                return true;
+            }
+            $periodEnd = \Carbon\Carbon::parse($t['period_start'])->addSeconds($t['period_seconds']);
+            // Keep if still within period, or if it was reset recently (within 24h of last period end)
+            return $now->lt($periodEnd) || $now->diffInHours($periodEnd) < 24;
+        });
+
+        if (count($active) !== count($throttles)) {
+            $this->cachedThrottles = array_values($active);
+            $this->throttlesDirty = true;
+            $this->registerShutdown();
+        } else {
+            $this->cachedThrottles = array_values($throttles);
         }
 
-        $this->cachedThrottles = json_decode(File::get($this->throttlesFile), true) ?: [];
         return $this->cachedThrottles;
     }
 
@@ -450,12 +488,7 @@ class MuteService
             return $this->cachedRateLimits;
         }
 
-        if (!File::exists($this->rateLimitsFile)) {
-            $this->cachedRateLimits = [];
-            return [];
-        }
-
-        $limits = json_decode(File::get($this->rateLimitsFile), true) ?: [];
+        $limits = $this->safeReadJson($this->rateLimitsFile);
 
         // Clean old entries (older than 1 hour)
         $cutoff = time() - 3600;

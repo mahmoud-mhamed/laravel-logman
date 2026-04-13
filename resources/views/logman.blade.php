@@ -481,8 +481,9 @@
                                                         @php
                                                             $statusLabels = ['reviewed' => 'Reviewed', 'in_progress' => 'In Progress', 'wont_fix' => "Won't Fix"];
                                                             $currentStatus = $entry['review_status'] ?? 'reviewed';
+                                                            $statusClass = str_replace('_', '-', $currentStatus);
                                                         @endphp
-                                                        <button class="review-btn {{ $currentStatus }}" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}', '{{ $currentStatus }}', '{{ addslashes($entry['review_note'] ?? '') }}', true)" title="{{ $statusLabels[$currentStatus] ?? 'Reviewed' }}{{ $entry['review_note'] ? ': ' . $entry['review_note'] : '' }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                                                        <button class="review-btn {{ $statusClass }}" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}', '{{ $currentStatus }}', '{{ addslashes($entry['review_note'] ?? '') }}', true)" title="{{ $statusLabels[$currentStatus] ?? 'Reviewed' }}{{ $entry['review_note'] ? ': ' . $entry['review_note'] : '' }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
                                                     @else
                                                         <button class="review-btn" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}')" title="Mark as Reviewed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
                                                     @endif

@@ -633,6 +633,17 @@ class LogManController extends Controller
         $channels = config('logman.channels', []);
         $enabledChannels = collect($channels)->filter(fn($ch) => !empty($ch['enabled']))->keys()->all();
 
+        $storagePath = config('logman.storage_path', storage_path('logman'));
+        $storageFiles = [
+            'mutes.json' => $storagePath . '/mutes.json',
+            'throttles.json' => $storagePath . '/throttles.json',
+            'rate_limits.json' => $storagePath . '/rate_limits.json',
+        ];
+        $storageSizes = [];
+        foreach ($storageFiles as $name => $path) {
+            $storageSizes[$name] = file_exists($path) ? filesize($path) : 0;
+        }
+
         return view('logman::about', [
             'version' => '1.0.0',
             'phpVersion' => PHP_VERSION,
@@ -641,6 +652,7 @@ class LogManController extends Controller
             'enabledChannels' => $enabledChannels,
             'allChannels' => $channels,
             'config' => config('logman'),
+            'storageSizes' => $storageSizes,
         ]);
     }
 
