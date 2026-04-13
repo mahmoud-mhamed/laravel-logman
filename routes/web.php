@@ -1,0 +1,39 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+use Mhamed\Logman\LogMan\LogManController;
+
+Route::group([
+    'prefix' => config('logman.log_viewer.route_prefix', 'logman'),
+    'middleware' => config('logman.log_viewer.middleware', ['web']),
+], function () {
+    Route::get('/', [LogManController::class, 'index'])->name('logman.index');
+    Route::get('/analysis', [LogManController::class, 'dashboard'])->name('logman.dashboard');
+    Route::get('/download', [LogManController::class, 'download'])->name('logman.download');
+    Route::post('/delete', [LogManController::class, 'delete'])->name('logman.delete');
+    Route::post('/delete-multiple', [LogManController::class, 'deleteMultiple'])->name('logman.delete-multiple');
+    Route::post('/clear', [LogManController::class, 'clear'])->name('logman.clear');
+    Route::post('/clear-cache', [LogManController::class, 'clearCache'])->name('logman.clear-cache');
+
+    // Review
+    Route::post('/review', [LogManController::class, 'review'])->name('logman.review');
+    Route::post('/unreview', [LogManController::class, 'unreview'])->name('logman.unreview');
+
+    // Mute
+    Route::get('/mutes', [LogManController::class, 'mutes'])->name('logman.mutes');
+    Route::post('/mute', [LogManController::class, 'mute'])->name('logman.mute');
+    Route::post('/unmute', [LogManController::class, 'unmute'])->name('logman.unmute');
+    Route::post('/extend-mute', [LogManController::class, 'extendMute'])->name('logman.extend-mute');
+    Route::post('/unmute-all', [LogManController::class, 'unmuteAll'])->name('logman.unmute-all');
+    Route::post('/unmute-multiple', [LogManController::class, 'unmuteMultiple'])->name('logman.unmute-multiple');
+
+    // Throttle
+    Route::get('/throttles', [LogManController::class, 'throttles'])->name('logman.throttles');
+    Route::post('/throttle', [LogManController::class, 'throttle'])->name('logman.throttle');
+    Route::post('/unthrottle', [LogManController::class, 'unthrottle'])->name('logman.unthrottle');
+    Route::post('/unthrottle-all', [LogManController::class, 'unthrottleAll'])->name('logman.unthrottle-all');
+    Route::post('/unthrottle-multiple', [LogManController::class, 'unthrottleMultiple'])->name('logman.unthrottle-multiple');
+
+    // Config
+    Route::get('/config', [LogManController::class, 'config'])->name('logman.config');
+});

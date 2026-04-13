@@ -1,0 +1,86 @@
+<?php
+
+namespace Mhamed\Logman;
+
+use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\ServiceProvider;
+use Mhamed\Logman\Services\MuteService;
+use Throwable;
+
+class LogmanServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        require_once __DIR__ . '/helpers.php';
+
+        $this->mergeConfigFrom(__DIR__ . '/../config/logman.php', 'logman');
+
+        $this->app->singleton(LogmanService::class, function () {
+            return new LogmanService();
+        });
+
+        $this->app->singleton(MuteService::class, function () {
+            return new MuteService();
+        });
+    }
+
+    public function boot(): void
+    {
+        $this->publishes([
+            __DIR__ . '/../config/logman.php' => config_path('logman.php'),
+        ], 'logman-config');
+
+        $this->publishes([
+            __DIR__ . '/../resources/views' => resource_path('views/vendor/logman'),
+        ], 'logman-views');
+
+        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'logman');
+
+        if (config('logman.log_viewer.enabled', true)) {
+            $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+        }
+
+        $this->ensureStorageDirectory();
+        $this->injectSlackChannelIfMissing();
+
+        if (config('logman.auto_report_exceptions')) {
+            $this->registerExceptionReporting();
+        }
+    }
+
+    protected function ensureStorageDirectory(): void
+    {
+        $path = config('logman.storage_path', storage_path('logman'));
+
+        if (!File::isDirectory($path)) {
+            File::makeDirectory($path, 0755, true);
+            File::put($path . '/.gitignore', "*\n!.gitignore\n");
+        }
+    }
+
+    protected function injectSlackChannelIfMissing(): void
+    {
+        $channelName = config('logman.log_channel', 'slack');
+
+        if (config("logging.channels.{$channelName}") === null) {
+            $channelConfig = config('logman.slack_channel_config', []);
+            config(["logging.channels.{$channelName}" => $channelConfig]);
+        }
+    }
+
+    protected function registerExceptionReporting(): void
+    {
+        try {
+            $handler = $this->app->make(ExceptionHandler::class);
+
+            if (method_exists($handler, 'reportable')) {
+                $handler->reportable(function (Throwable $e) {
+                    $this->app->make(LogmanService::class)->logException($e);
+                });
+            }
+        } catch (Throwable $e) {
+            // Silently fail — the handler may not be available yet
+        }
+    }
+}
