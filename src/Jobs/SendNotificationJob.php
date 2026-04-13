@@ -1,13 +1,13 @@
 <?php
 
-namespace Mhamed\Logman\Jobs;
+namespace MahmoudMhamed\Logman\Jobs;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Mhamed\Logman\Channels\ChannelInterface;
+use MahmoudMhamed\Logman\Channels\ChannelInterface;
 use Throwable;
 
 class SendNotificationJob implements ShouldQueue
@@ -26,10 +26,10 @@ class SendNotificationJob implements ShouldQueue
     }
 
     protected static array $allowedDrivers = [
-        \Mhamed\Logman\Channels\SlackChannel::class,
-        \Mhamed\Logman\Channels\TelegramChannel::class,
-        \Mhamed\Logman\Channels\DiscordChannel::class,
-        \Mhamed\Logman\Channels\MailChannel::class,
+        \MahmoudMhamed\Logman\Channels\SlackChannel::class,
+        \MahmoudMhamed\Logman\Channels\TelegramChannel::class,
+        \MahmoudMhamed\Logman\Channels\DiscordChannel::class,
+        \MahmoudMhamed\Logman\Channels\MailChannel::class,
     ];
 
     public function handle(): void

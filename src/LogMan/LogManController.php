@@ -1,12 +1,12 @@
 <?php
 
-namespace Mhamed\Logman\LogMan;
+namespace MahmoudMhamed\Logman\LogMan;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Response;
-use Mhamed\Logman\Channels\ChannelInterface;
-use Mhamed\Logman\Services\MuteService;
+use MahmoudMhamed\Logman\Channels\ChannelInterface;
+use MahmoudMhamed\Logman\Services\MuteService;
 
 class LogManController extends Controller
 {
@@ -490,10 +490,10 @@ class LogManController extends Controller
 
         // Resolve the channel driver
         $drivers = [
-            'slack' => \Mhamed\Logman\Channels\SlackChannel::class,
-            'telegram' => \Mhamed\Logman\Channels\TelegramChannel::class,
-            'discord' => \Mhamed\Logman\Channels\DiscordChannel::class,
-            'mail' => \Mhamed\Logman\Channels\MailChannel::class,
+            'slack' => \MahmoudMhamed\Logman\Channels\SlackChannel::class,
+            'telegram' => \MahmoudMhamed\Logman\Channels\TelegramChannel::class,
+            'discord' => \MahmoudMhamed\Logman\Channels\DiscordChannel::class,
+            'mail' => \MahmoudMhamed\Logman\Channels\MailChannel::class,
         ];
 
         // Only allow known built-in drivers — ignore custom 'driver' from config to prevent arbitrary class instantiation

@@ -4,6 +4,6 @@
 if (!function_exists('highlightSearch')) {
     function highlightSearch(string $text, string $search, bool $isRegex = false): string
     {
-        return \Mhamed\Logman\Support\TextHighlighter::highlight($text, $search, $isRegex);
+        return \MahmoudMhamed\Logman\Support\TextHighlighter::highlight($text, $search, $isRegex);
     }
 }

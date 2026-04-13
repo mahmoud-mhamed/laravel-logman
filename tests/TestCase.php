@@ -1,8 +1,8 @@
 <?php
 
-namespace Mhamed\Logman\Tests;
+namespace MahmoudMhamed\Logman\Tests;
 
-use Mhamed\Logman\LogmanServiceProvider;
+use MahmoudMhamed\Logman\LogmanServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
@@ -15,7 +15,7 @@ abstract class TestCase extends BaseTestCase
     protected function getPackageAliases($app): array
     {
         return [
-            'Logman' => \Mhamed\Logman\Facades\Logman::class,
+            'Logman' => \MahmoudMhamed\Logman\Facades\Logman::class,
         ];
     }
 

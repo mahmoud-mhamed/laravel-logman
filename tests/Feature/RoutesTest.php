@@ -1,8 +1,8 @@
 <?php
 
-namespace Mhamed\Logman\Tests\Feature;
+namespace MahmoudMhamed\Logman\Tests\Feature;
 
-use Mhamed\Logman\Tests\TestCase;
+use MahmoudMhamed\Logman\Tests\TestCase;
 
 class RoutesTest extends TestCase
 {

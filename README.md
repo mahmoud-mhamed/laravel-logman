@@ -333,7 +333,7 @@ With `auto_report_exceptions` enabled (default), every unhandled exception is re
 ### Manual Reporting
 
 ```php
-use Mhamed\Logman\Facades\Logman;
+use MahmoudMhamed\Logman\Facades\Logman;
 
 // Report an exception manually
 try {
@@ -429,7 +429,7 @@ For production, add authentication middleware and/or an authorize callback:
 Register your own notification channel:
 
 ```php
-use Mhamed\Logman\Channels\ChannelInterface;
+use MahmoudMhamed\Logman\Channels\ChannelInterface;
 
 class PagerDutyChannel implements ChannelInterface
 {
@@ -441,7 +441,7 @@ class PagerDutyChannel implements ChannelInterface
 Register it in a service provider:
 
 ```php
-use Mhamed\Logman\LogmanService;
+use MahmoudMhamed\Logman\LogmanService;
 
 LogmanService::registerDriver('pagerduty', PagerDutyChannel::class);
 ```

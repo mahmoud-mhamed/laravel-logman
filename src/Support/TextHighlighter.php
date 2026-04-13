@@ -1,6 +1,6 @@
 <?php
 
-namespace Mhamed\Logman\Support;
+namespace MahmoudMhamed\Logman\Support;
 
 class TextHighlighter
 {

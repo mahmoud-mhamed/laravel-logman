@@ -353,7 +353,7 @@
                 <span style="color:var(--text-light);">// Every unhandled exception is reported automatically</span><br>
                 <span style="color:var(--text-light);">// when auto_report_exceptions is enabled.</span><br><br>
                 <span style="color:var(--text-light);">// Manual reporting:</span><br>
-                <span style="color:var(--info-text);">use</span> Mhamed\Logman\Facades\Logman;<br><br>
+                <span style="color:var(--info-text);">use</span> MahmoudMhamed\Logman\Facades\Logman;<br><br>
                 <span style="color:var(--info-text);">try</span> {<br>
                 &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text-light);">// risky operation...</span><br>
                 } <span style="color:var(--info-text);">catch</span> (\Throwable <span style="color:var(--warning-text);">$e</span>) {<br>

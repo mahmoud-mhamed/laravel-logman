@@ -1,19 +1,19 @@
 <?php
 
-namespace Mhamed\Logman;
+namespace MahmoudMhamed\Logman;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\ServiceProvider;
-use Mhamed\Logman\Console\Commands\LogmanClearMutesCommand;
-use Mhamed\Logman\Console\Commands\LogmanDigestCommand;
-use Mhamed\Logman\Console\Commands\LogmanInstallCommand;
-use Mhamed\Logman\Console\Commands\LogmanListMutesCommand;
-use Mhamed\Logman\Console\Commands\LogmanMuteCommand;
-use Mhamed\Logman\Console\Commands\LogmanTestCommand;
-use Mhamed\Logman\Http\Middleware\AuthorizeLogman;
-use Mhamed\Logman\Services\MuteService;
+use MahmoudMhamed\Logman\Console\Commands\LogmanClearMutesCommand;
+use MahmoudMhamed\Logman\Console\Commands\LogmanDigestCommand;
+use MahmoudMhamed\Logman\Console\Commands\LogmanInstallCommand;
+use MahmoudMhamed\Logman\Console\Commands\LogmanListMutesCommand;
+use MahmoudMhamed\Logman\Console\Commands\LogmanMuteCommand;
+use MahmoudMhamed\Logman\Console\Commands\LogmanTestCommand;
+use MahmoudMhamed\Logman\Http\Middleware\AuthorizeLogman;
+use MahmoudMhamed\Logman\Services\MuteService;
 use Throwable;
 
 class LogmanServiceProvider extends ServiceProvider
@@ -90,6 +90,14 @@ class LogmanServiceProvider extends ServiceProvider
         if (!File::isDirectory($path)) {
             File::makeDirectory($path, 0755, true);
             File::put($path . '/.gitignore', "*\n!.gitignore\n");
+        }
+
+        // Ensure JSON data files exist so read/write operations don't fail
+        foreach (['mutes.json', 'throttles.json', 'rate_limits.json'] as $file) {
+            $filePath = $path . '/' . $file;
+            if (!File::exists($filePath)) {
+                File::put($filePath, '[]');
+            }
         }
     }
 

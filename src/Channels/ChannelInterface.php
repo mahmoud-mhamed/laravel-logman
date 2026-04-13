@@ -1,6 +1,6 @@
 <?php
 
-namespace Mhamed\Logman\Channels;
+namespace MahmoudMhamed\Logman\Channels;
 
 interface ChannelInterface
 {

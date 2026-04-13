@@ -1,6 +1,6 @@
 <?php
 
-namespace Mhamed\Logman\Services;
+namespace MahmoudMhamed\Logman\Services;
 
 use Illuminate\Support\Facades\File;
 use Throwable;

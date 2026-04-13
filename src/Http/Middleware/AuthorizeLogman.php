@@ -1,6 +1,6 @@
 <?php
 
-namespace Mhamed\Logman\Http\Middleware;
+namespace MahmoudMhamed\Logman\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;

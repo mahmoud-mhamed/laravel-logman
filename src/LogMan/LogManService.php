@@ -1,6 +1,6 @@
 <?php
 
-namespace Mhamed\Logman\LogMan;
+namespace MahmoudMhamed\Logman\LogMan;
 
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;

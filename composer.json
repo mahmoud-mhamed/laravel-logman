@@ -15,7 +15,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Mhamed\\Logman\\": "src/"
+            "MahmoudMhamed\\Logman\\": "src/"
         },
         "files": [
             "src/helpers.php"
@@ -23,16 +23,16 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Mhamed\\Logman\\Tests\\": "tests/"
+            "MahmoudMhamed\\Logman\\Tests\\": "tests/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Mhamed\\Logman\\LogmanServiceProvider"
+                "MahmoudMhamed\\Logman\\LogmanServiceProvider"
             ],
             "aliases": {
-                "Logman": "Mhamed\\Logman\\Facades\\Logman"
+                "Logman": "MahmoudMhamed\\Logman\\Facades\\Logman"
             }
         }
     },

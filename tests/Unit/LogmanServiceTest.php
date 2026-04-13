@@ -1,10 +1,10 @@
 <?php
 
-namespace Mhamed\Logman\Tests\Unit;
+namespace MahmoudMhamed\Logman\Tests\Unit;
 
-use Mhamed\Logman\Channels\ChannelInterface;
-use Mhamed\Logman\LogmanService;
-use Mhamed\Logman\Tests\TestCase;
+use MahmoudMhamed\Logman\Channels\ChannelInterface;
+use MahmoudMhamed\Logman\LogmanService;
+use MahmoudMhamed\Logman\Tests\TestCase;
 
 class LogmanServiceTest extends TestCase
 {

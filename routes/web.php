@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Mhamed\Logman\LogMan\LogManController;
+use MahmoudMhamed\Logman\LogMan\LogManController;
 
 Route::group([
     'prefix' => config('logman.viewer.route_prefix', 'logman'),

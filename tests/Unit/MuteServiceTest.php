@@ -1,9 +1,9 @@
 <?php
 
-namespace Mhamed\Logman\Tests\Unit;
+namespace MahmoudMhamed\Logman\Tests\Unit;
 
-use Mhamed\Logman\Services\MuteService;
-use Mhamed\Logman\Tests\TestCase;
+use MahmoudMhamed\Logman\Services\MuteService;
+use MahmoudMhamed\Logman\Tests\TestCase;
 
 class MuteServiceTest extends TestCase
 {

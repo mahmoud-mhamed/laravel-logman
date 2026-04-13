@@ -1,17 +1,17 @@
 <?php
 
-namespace Mhamed\Logman;
+namespace MahmoudMhamed\Logman;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
-use Mhamed\Logman\Channels\ChannelInterface;
-use Mhamed\Logman\Channels\DiscordChannel;
-use Mhamed\Logman\Channels\MailChannel;
-use Mhamed\Logman\Channels\SlackChannel;
-use Mhamed\Logman\Channels\TelegramChannel;
-use Mhamed\Logman\Jobs\SendNotificationJob;
-use Mhamed\Logman\Services\MuteService;
+use MahmoudMhamed\Logman\Channels\ChannelInterface;
+use MahmoudMhamed\Logman\Channels\DiscordChannel;
+use MahmoudMhamed\Logman\Channels\MailChannel;
+use MahmoudMhamed\Logman\Channels\SlackChannel;
+use MahmoudMhamed\Logman\Channels\TelegramChannel;
+use MahmoudMhamed\Logman\Jobs\SendNotificationJob;
+use MahmoudMhamed\Logman\Services\MuteService;
 use Throwable;
 
 class LogmanService

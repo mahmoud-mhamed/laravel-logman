@@ -1,14 +1,14 @@
 <?php
 
-namespace Mhamed\Logman\Console\Commands;
+namespace MahmoudMhamed\Logman\Console\Commands;
 
 use Illuminate\Console\Command;
-use Mhamed\Logman\Channels\ChannelInterface;
-use Mhamed\Logman\Channels\DiscordChannel;
-use Mhamed\Logman\Channels\MailChannel;
-use Mhamed\Logman\Channels\SlackChannel;
-use Mhamed\Logman\Channels\TelegramChannel;
-use Mhamed\Logman\LogMan\LogManService;
+use MahmoudMhamed\Logman\Channels\ChannelInterface;
+use MahmoudMhamed\Logman\Channels\DiscordChannel;
+use MahmoudMhamed\Logman\Channels\MailChannel;
+use MahmoudMhamed\Logman\Channels\SlackChannel;
+use MahmoudMhamed\Logman\Channels\TelegramChannel;
+use MahmoudMhamed\Logman\LogMan\LogManService;
 
 class LogmanDigestCommand extends Command
 {

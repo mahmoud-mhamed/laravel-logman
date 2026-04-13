@@ -1,9 +1,9 @@
 <?php
 
-namespace Mhamed\Logman\Facades;
+namespace MahmoudMhamed\Logman\Facades;
 
 use Illuminate\Support\Facades\Facade;
-use Mhamed\Logman\LogmanService;
+use MahmoudMhamed\Logman\LogmanService;
 
 /**
  * @method static void logException(\Throwable $throwable)
@@ -11,7 +11,7 @@ use Mhamed\Logman\LogmanService;
  * @method static void slackLogInfo(string $message)
  * @method static void registerDriver(string $name, string $class)
  *
- * @see \Mhamed\Logman\LogmanService
+ * @see \MahmoudMhamed\Logman\LogmanService
  */
 class Logman extends Facade
 {

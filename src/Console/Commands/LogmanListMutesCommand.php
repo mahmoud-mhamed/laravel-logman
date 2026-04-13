@@ -1,9 +1,9 @@
 <?php
 
-namespace Mhamed\Logman\Console\Commands;
+namespace MahmoudMhamed\Logman\Console\Commands;
 
 use Illuminate\Console\Command;
-use Mhamed\Logman\Services\MuteService;
+use MahmoudMhamed\Logman\Services\MuteService;
 
 class LogmanListMutesCommand extends Command
 {
