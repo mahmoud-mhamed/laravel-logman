@@ -56,7 +56,7 @@
         </div>
 
         @if(session('success'))
-            <div class="flash flash-success">{{ session('success') }}</div>
+            <div class="flash flash-success"><span>{{ session('success') }}</span><button class="flash-dismiss" onclick="this.parentElement.remove()" title="Dismiss">&times;</button></div>
         @endif
 
         @if(count($throttles) > 0)

@@ -47,6 +47,15 @@
         .regex-toggle { padding: 8px 12px; border: 1px solid var(--border); border-left: none; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--bg); color: var(--text-light); font-size: 12px; cursor: pointer; font-family: var(--font-mono); font-weight: 700; transition: all 0.2s; }
         .regex-toggle.active { background: var(--primary); color: white; border-color: var(--primary); }
         .regex-toggle:hover:not(.active) { color: var(--primary); border-color: var(--primary); }
+        .search-history { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); z-index: 50; display: none; max-height: 240px; overflow-y: auto; }
+        .search-history.open { display: block; }
+        .search-history-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; font-size: 12px; cursor: pointer; color: var(--text); transition: background 0.15s; }
+        .search-history-item:hover { background: var(--hover); }
+        .search-history-item .sh-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .search-history-item .sh-remove { color: var(--text-light); font-size: 14px; padding: 0 4px; opacity: 0; transition: opacity 0.15s; line-height: 1; }
+        .search-history-item:hover .sh-remove { opacity: 1; }
+        .search-history-item .sh-remove:hover { color: var(--danger-text); }
+        .search-history-empty { padding: 12px; text-align: center; font-size: 12px; color: var(--text-light); }
         .actions-bar { display: flex; gap: 4px; margin-left: auto; }
 
         /* Filters bar */
@@ -138,7 +147,7 @@
         .too-large { text-align: center; padding: 40px; color: var(--warning-text); background: var(--warning-bg); margin: 16px; border-radius: var(--radius); border: 1px solid var(--warning-border); font-weight: 500; }
 
         /* Review */
-        .review-btn { background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 11px; color: var(--text-light); transition: all 0.2s; line-height: 1.4; }
+        .review-btn { background: none; border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; cursor: pointer; font-size: 11px; color: var(--text-light); transition: all 0.2s; line-height: 1; display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; }
         .review-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
         .review-btn.reviewed { background: var(--success-bg); color: var(--success-text); border-color: var(--debug-border); }
         .review-btn.in-progress { background: var(--warning-bg); color: var(--warning-text); border-color: var(--warning-border); }
@@ -154,7 +163,7 @@
         .review-filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 
         /* Mute */
-        .mute-btn { background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 11px; color: var(--text-light); transition: all 0.2s; line-height: 1.4; }
+        .mute-btn { background: none; border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; cursor: pointer; font-size: 11px; color: var(--text-light); transition: all 0.2s; line-height: 1; display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; }
         .mute-btn:hover { border-color: var(--warning-text); color: var(--warning-text); background: var(--warning-bg); }
         .mute-dropdown { position: fixed; background-color: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: 0 4px 24px rgba(0,0,0,0.25); z-index: 9999; min-width: 220px; padding: 8px 0; display: none; isolation: isolate; }
         [data-theme="dark"] .mute-dropdown { box-shadow: 0 4px 24px rgba(0,0,0,0.6); }
@@ -245,11 +254,13 @@
                         @if($timeFrom)<input type="hidden" name="time_from" value="{{ $timeFrom }}">@endif
                         @if($timeTo)<input type="hidden" name="time_to" value="{{ $timeTo }}">@endif
 
-                        <div class="search-group">
-                            <input type="text" name="search" class="search-box"
+                        <div class="search-group" style="position:relative;">
+                            <input type="text" name="search" class="search-box" id="searchBox"
                                    placeholder="{{ $isRegex ? 'Regex pattern...' : 'Search logs...' }}"
-                                   value="{{ $search }}" autocomplete="off">
+                                   value="{{ $search }}" autocomplete="off"
+                                   onfocus="showSearchHistory()" oninput="filterSearchHistory(this.value)">
                             <button type="button" class="regex-toggle {{ $isRegex ? 'active' : '' }}" onclick="toggleRegex()" title="Toggle regex search">.*</button>
+                            <div class="search-history" id="searchHistory"></div>
                         </div>
                     </form>
 
@@ -368,7 +379,7 @@
                 </div>
 
                 @if(session('success'))
-                    <div class="flash flash-success">{{ session('success') }}</div>
+                    <div class="flash flash-success"><span>{{ session('success') }}</span><button class="flash-dismiss" onclick="this.parentElement.remove()" title="Dismiss">&times;</button></div>
                 @endif
 
                 @if($tooLarge)
@@ -409,34 +420,52 @@
                                                     <div class="review-note-text">{{ $entry['review_note'] }}</div>
                                                 @endif
                                                 @if(!empty($entry['is_muted']))
-                                                    <span class="muted-indicator"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg> Muted</span>
+                                                    <span class="muted-indicator"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg> Muted</span>
                                                 @endif
                                                 @if(!empty($entry['is_throttled']))
-                                                    <span class="review-indicator" style="color:var(--info-text);"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {{ $entry['throttle_info']['current_hits'] }}/{{ $entry['throttle_info']['max_hits'] }}</span>
+                                                    <span class="review-indicator" style="color:var(--info-text);"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {{ $entry['throttle_info']['current_hits'] }}/{{ $entry['throttle_info']['max_hits'] }}</span>
                                                 @endif
                                             </td>
                                             <td onclick="event.stopPropagation()">
                                                 <div class="review-actions">
+                                                    {{-- Send to Channel --}}
+                                                    @if(!empty($enabledChannels))
+                                                        <div style="position:relative;display:inline-block;">
+                                                            <button class="mute-btn" onclick="toggleMuteDropdown(this)" title="Send to channel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg></button>
+                                                            <div class="mute-dropdown">
+                                                                <div class="mute-dropdown-header">Send to Channel</div>
+                                                                @foreach($enabledChannels as $ch)
+                                                                    <form method="POST" action="{{ route('logman.send-to-channel') }}" style="display:contents;">
+                                                                        @csrf
+                                                                        <input type="hidden" name="file" value="{{ $selectedFile }}">
+                                                                        <input type="hidden" name="hash" value="{{ $entry['hash'] }}">
+                                                                        <input type="hidden" name="channel" value="{{ $ch }}">
+                                                                        <button type="submit" class="mute-dropdown-item">{{ ucfirst($ch) }}</button>
+                                                                    </form>
+                                                                @endforeach
+                                                            </div>
+                                                        </div>
+                                                    @endif
                                                     @if(!empty($entry['reviewed']))
                                                         @php
                                                             $statusLabels = ['reviewed' => 'Reviewed', 'in_progress' => 'In Progress', 'wont_fix' => "Won't Fix"];
                                                             $currentStatus = $entry['review_status'] ?? 'reviewed';
                                                         @endphp
-                                                        <button class="review-btn {{ $currentStatus }}" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}', '{{ $currentStatus }}', '{{ addslashes($entry['review_note'] ?? '') }}')" title="{{ $statusLabels[$currentStatus] ?? 'Reviewed' }}{{ $entry['review_note'] ? ': ' . $entry['review_note'] : '' }}">&#10003;</button>
+                                                        <button class="review-btn {{ $currentStatus }}" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}', '{{ $currentStatus }}', '{{ addslashes($entry['review_note'] ?? '') }}')" title="{{ $statusLabels[$currentStatus] ?? 'Reviewed' }}{{ $entry['review_note'] ? ': ' . $entry['review_note'] : '' }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
                                                         <form method="POST" action="{{ route('logman.unreview') }}" style="display:inline;">
                                                             @csrf
                                                             <input type="hidden" name="file" value="{{ $selectedFile }}">
                                                             <input type="hidden" name="hash" value="{{ $entry['hash'] }}">
-                                                            <button type="submit" class="review-btn" title="Remove review">&times;</button>
+                                                            <button type="submit" class="review-btn" title="Remove review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                                                         </form>
                                                     @else
-                                                        <button class="review-btn" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}')" title="Mark as Reviewed">&#10003;</button>
+                                                        <button class="review-btn" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}')" title="Mark as Reviewed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
                                                     @endif
                                                     @if(in_array($entry['level'], ['emergency','alert','critical','error','warning']))
                                                         @php $muteClass = $entry['exception_class'] ?: ($entry['exception_message'] ?? $entry['message']); @endphp
                                                         <div style="position:relative;display:inline-block;">
                                                             @if(!empty($entry['is_muted']))
-                                                                <button class="mute-btn" style="color:var(--danger-text);border-color:var(--danger-border);background:var(--danger-bg);" onclick="toggleMuteDropdown(this)" title="Muted"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
+                                                                <button class="mute-btn" style="color:var(--danger-text);border-color:var(--danger-border);background:var(--danger-bg);" onclick="toggleMuteDropdown(this)" title="Muted"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
                                                                 <div class="mute-dropdown" style="min-width:260px;">
                                                                     <div class="mute-dropdown-header">Muted</div>
                                                                     <div style="padding:6px 14px;font-size:12px;color:var(--text-muted);">
@@ -458,7 +487,7 @@
                                                                     </form>
                                                                 </div>
                                                             @else
-                                                                <button class="mute-btn" onclick="toggleMuteDropdown(this)" title="Mute this error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
+                                                                <button class="mute-btn" onclick="toggleMuteDropdown(this)" title="Mute this error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
                                                                 <div class="mute-dropdown">
                                                                     <div class="mute-dropdown-header">Mute Notifications</div>
                                                                     @foreach(['1h' => '1 Hour', '6h' => '6 Hours', '1d' => '1 Day', '3d' => '3 Days', '1w' => '1 Week'] as $dur => $durLabel)
@@ -478,7 +507,7 @@
                                                         {{-- Throttle --}}
                                                         <div style="position:relative;display:inline-block;">
                                                             @if(!empty($entry['is_throttled']))
-                                                                <button class="mute-btn" style="color:var(--info-text);border-color:var(--info-border);background:var(--info-bg);" onclick="toggleMuteDropdown(this)" title="Throttled: {{ $entry['throttle_info']['current_hits'] }}/{{ $entry['throttle_info']['max_hits'] }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+                                                                <button class="mute-btn" style="color:var(--info-text);border-color:var(--info-border);background:var(--info-bg);" onclick="toggleMuteDropdown(this)" title="Throttled: {{ $entry['throttle_info']['current_hits'] }}/{{ $entry['throttle_info']['max_hits'] }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
                                                                 <div class="mute-dropdown" style="min-width:260px;">
                                                                     <div class="mute-dropdown-header">Throttled</div>
                                                                     <div style="padding:6px 14px;font-size:12px;color:var(--text-muted);">
@@ -497,7 +526,7 @@
                                                                     </form>
                                                                 </div>
                                                             @else
-                                                                <button class="mute-btn" onclick="openThrottleModal('{{ addslashes($muteClass) }}')" title="Set throttle limit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+                                                                <button class="mute-btn" onclick="openThrottleModal('{{ addslashes($muteClass) }}')" title="Set throttle limit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
                                                             @endif
                                                         </div>
                                                     @endif
@@ -701,7 +730,74 @@ function setPerPage(val) {
 }
 
 document.querySelector('.search-box')?.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('filterForm').submit(); }
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        saveSearchHistory(this.value);
+        document.getElementById('filterForm').submit();
+    }
+});
+
+// ─── Search History ───────────────────────────────────────
+const SEARCH_HISTORY_KEY = 'logman-search-history';
+const SEARCH_HISTORY_MAX = 10;
+
+function getSearchHistory() {
+    try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY)) || []; }
+    catch { return []; }
+}
+
+function saveSearchHistory(query) {
+    if (!query || !query.trim()) return;
+    query = query.trim();
+    let history = getSearchHistory().filter(h => h !== query);
+    history.unshift(query);
+    if (history.length > SEARCH_HISTORY_MAX) history = history.slice(0, SEARCH_HISTORY_MAX);
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+}
+
+function removeSearchHistoryItem(query, e) {
+    e.stopPropagation();
+    let history = getSearchHistory().filter(h => h !== query);
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+    renderSearchHistory(history);
+}
+
+function showSearchHistory() {
+    const history = getSearchHistory();
+    renderSearchHistory(history);
+}
+
+function filterSearchHistory(value) {
+    const history = getSearchHistory();
+    if (!value.trim()) { renderSearchHistory(history); return; }
+    const q = value.toLowerCase();
+    renderSearchHistory(history.filter(h => h.toLowerCase().includes(q)));
+}
+
+function renderSearchHistory(items) {
+    const el = document.getElementById('searchHistory');
+    if (!items.length) { el.classList.remove('open'); return; }
+    el.innerHTML = items.map(item =>
+        `<div class="search-history-item" onclick="selectSearchHistory('${item.replace(/'/g, "\\'")}')">
+            <span class="sh-text">${item.replace(/</g,'&lt;')}</span>
+            <span class="sh-remove" onclick="removeSearchHistoryItem('${item.replace(/'/g, "\\'")}', event)" title="Remove">&times;</span>
+        </div>`
+    ).join('');
+    el.classList.add('open');
+}
+
+function selectSearchHistory(query) {
+    const box = document.getElementById('searchBox');
+    box.value = query;
+    document.getElementById('searchHistory').classList.remove('open');
+    saveSearchHistory(query);
+    document.getElementById('filterForm').submit();
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.search-group')) {
+        document.getElementById('searchHistory')?.classList.remove('open');
+    }
 });
 
 function updateDeleteBtn() {

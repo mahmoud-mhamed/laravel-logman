@@ -12,7 +12,15 @@
         .config-header h2 { font-size: 18px; font-weight: 700; }
         .config-header p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
         .config-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; }
-        .config-section-title { padding: 14px 20px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); background: var(--bg-sidebar); border-bottom: 1px solid var(--border); }
+        .config-channels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        @media (max-width: 768px) { .config-channels-grid { grid-template-columns: 1fr; } }
+        .config-section-title { padding: 14px 20px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); background: var(--bg-sidebar); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .config-section.channel-enabled { border-color: var(--debug-border); }
+        .config-section.channel-enabled .config-section-title { background: var(--debug-bg); color: var(--debug-text); }
+        .config-section.channel-disabled { opacity: 0.6; }
+        .channel-status-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em; }
+        .channel-on { background: var(--debug-text); color: #fff; }
+        .channel-off { background: var(--border); color: var(--text-light); }
         .config-row { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--border-light); gap: 16px; }
         .config-row:last-child { border-bottom: none; }
         .config-row:hover { background: var(--hover); }
@@ -46,50 +54,46 @@
             <p>Current settings for Logman. Edit <code>config/logman.php</code> to change these values.</p>
         </div>
 
-        @foreach($sections as $sectionName => $items)
-            <div class="config-section">
-                <div class="config-section-title">{{ $sectionName }}</div>
-                @foreach($items as $item)
-                    <div class="config-row">
-                        <div class="config-label">
-                            <div class="label-name">{{ $item['label'] }}</div>
-                            <div class="label-key">{{ $item['key'] }}</div>
-                        </div>
-                        <div class="config-value">
-                            @if($item['type'] === 'bool')
-                                @if($item['value'])
-                                    <span class="val-true">true</span>
-                                @else
-                                    <span class="val-false">false</span>
-                                @endif
-                            @elseif($item['type'] === 'number')
-                                <span class="val-number">{{ $item['value'] }}</span>
-                            @elseif($item['type'] === 'path')
-                                <span class="val-path">{{ $item['value'] }}</span>
-                            @elseif($item['type'] === 'status')
-                                @if(str_contains($item['value'], 'NOT SET'))
-                                    <span class="val-status-bad">{{ $item['value'] }}</span>
-                                @else
-                                    <span class="val-status-ok">{{ $item['value'] }}</span>
-                                @endif
-                            @elseif($item['type'] === 'list')
-                                @if(is_array($item['value']) && count($item['value']) > 0)
-                                    <div class="val-list">
-                                        @foreach($item['value'] as $listItem)
-                                            <span class="val-list-item">{{ $listItem }}</span>
-                                        @endforeach
-                                    </div>
-                                @else
-                                    <span class="val-empty">None</span>
-                                @endif
-                            @else
-                                {{ $item['value'] }}
-                            @endif
-                        </div>
-                        <div class="config-desc">{{ $item['description'] }}</div>
-                    </div>
+        @php
+            $channelSections = [];
+            $otherSections = [];
+            foreach ($sections as $name => $items) {
+                if (str_starts_with($name, 'Channel:')) {
+                    $channelSections[$name] = $items;
+                } else {
+                    $otherSections[$name] = $items;
+                }
+            }
+            // Sort channels: enabled first
+            uksort($channelSections, function($a, $b) use ($channelSections) {
+                $aEnabled = collect($channelSections[$a])->first(fn($i) => str_ends_with($i['key'], '.enabled'))['value'] ?? false;
+                $bEnabled = collect($channelSections[$b])->first(fn($i) => str_ends_with($i['key'], '.enabled'))['value'] ?? false;
+                return $bEnabled <=> $aEnabled;
+            });
+        @endphp
+
+        {{-- Non-channel sections before channels --}}
+        @foreach($otherSections as $sectionName => $items)
+            @if($sectionName === 'Rate Limiting') @break @endif
+            @include('logman::partials._config-section', ['sectionName' => $sectionName, 'items' => $items])
+        @endforeach
+
+        {{-- Channel sections in grid --}}
+        @if(!empty($channelSections))
+            <div class="config-channels-grid">
+                @foreach($channelSections as $sectionName => $items)
+                    @include('logman::partials._config-section', ['sectionName' => $sectionName, 'items' => $items])
                 @endforeach
             </div>
+        @endif
+
+        {{-- Remaining sections --}}
+        @php $pastChannels = false; @endphp
+        @foreach($otherSections as $sectionName => $items)
+            @if($sectionName === 'Rate Limiting') @php $pastChannels = true; @endphp @endif
+            @if($pastChannels)
+                @include('logman::partials._config-section', ['sectionName' => $sectionName, 'items' => $items])
+            @endif
         @endforeach
     </div>
 </div>

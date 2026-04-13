@@ -21,9 +21,11 @@ On top of that, Logman ships with a **full-featured log viewer** you can access 
 ## Features
 
 ### Notifications
+- **Multi-Channel** — send to Slack, Telegram, Discord, Email — or all at once
 - **Automatic Exception Reporting** — every unhandled exception, reported with full context
 - **Rich Error Details** — stack trace, request info, auth user, DB queries, job context, environment
-- **Rate Limiting** — prevents the same exception from flooding your channel (configurable cooldown)
+- **Custom Channels** — register your own notification driver with one line
+- **Rate Limiting** — prevents the same exception from flooding your channels (configurable cooldown)
 - **Mute System** — temporarily silence specific exceptions
 - **Throttle System** — limit how many times an exception is reported per time period
 
@@ -63,24 +65,17 @@ Laravel auto-discovers the package. No manual registration needed.
 
 ## Quick Start
 
-### 1. Set up your Slack Webhook
+### 1. Pick a channel and configure it (see details below)
 
-1. Go to [Slack Apps](https://api.slack.com/apps) > **Create New App** > **From scratch**
-2. Navigate to **Incoming Webhooks** > toggle **On**
-3. Click **Add New Webhook to Workspace** > select your channel > **Allow**
-4. Copy the Webhook URL
+### 2. Test your setup
 
-### 2. Add to `.env`
-
-```env
-LOG_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../xxxx
+```bash
+php artisan logman:test
 ```
-
-**Done.** Every unhandled exception will now be reported to Slack automatically.
 
 ### 3. Open the Log Viewer
 
-Navigate to `/logman` in your browser to access the log viewer.
+Navigate to `/logman` in your browser.
 
 ---
 
@@ -105,9 +100,121 @@ php artisan vendor:publish --tag=logman-views
 | `enable_production` | `true` | Send reports in production |
 | `enable_local` | `false` | Send reports in local environment |
 | `auto_report_exceptions` | `true` | Auto-register in exception handler |
-| `log_channel` | `'slack'` | Laravel logging channel to use |
 | `ignore` | `[]` | Exception classes to skip (uses `instanceof`) |
 | `storage_path` | `storage/logman` | Directory for mutes, throttles, rate limits data |
+
+### Channel: Slack
+
+Slack is **enabled by default**.
+
+**Setup:**
+
+1. Go to [https://api.slack.com/apps](https://api.slack.com/apps)
+2. Click **Create New App** > **From scratch**
+3. Give it a name (e.g. "Exception Bot") and select your workspace
+4. In the left sidebar, click **Incoming Webhooks**
+5. Toggle **Activate Incoming Webhooks** to **On**
+6. Click **Add New Webhook to Workspace**
+7. Select the channel and click **Allow**
+8. Copy the **Webhook URL**
+
+**Add to `.env`:**
+
+```env
+LOG_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../xxxx
+```
+
+If your app doesn't already define a `slack` logging channel, Logman creates one automatically using `slack_channel_config` in the config file.
+
+---
+
+### Channel: Telegram
+
+**Setup:**
+
+1. Open Telegram and search for **@BotFather**
+2. Send `/newbot` and follow the prompts to create a bot
+3. Copy the **Bot Token** you receive
+4. Add the bot to your group/channel
+5. To get the **Chat ID**: send a message in the group, then open `https://api.telegram.org/bot<TOKEN>/getUpdates` and find the `chat.id` value
+
+**Add to `.env`:**
+
+```env
+LOGMAN_TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+LOGMAN_TELEGRAM_CHAT_ID=-100123456789
+```
+
+**Enable in `config/logman.php`:**
+
+```php
+'telegram' => [
+    'enabled' => true,
+    ...
+],
+```
+
+---
+
+### Channel: Discord
+
+**Setup:**
+
+1. Open your Discord server and go to **Server Settings** > **Integrations**
+2. Click **Webhooks** > **New Webhook**
+3. Choose a name and the channel to post to
+4. Click **Copy Webhook URL**
+
+**Add to `.env`:**
+
+```env
+LOGMAN_DISCORD_WEBHOOK=https://discord.com/api/webhooks/1234567890/abcdef...
+```
+
+**Enable in `config/logman.php`:**
+
+```php
+'discord' => [
+    'enabled' => true,
+    ...
+],
+```
+
+---
+
+### Channel: Mail
+
+Sends exception reports via email using Laravel's built-in mail system. Make sure your app's mail config (`config/mail.php`) is working first.
+
+**Add to `.env`:**
+
+```env
+LOGMAN_MAIL_TO=alerts@example.com,team@example.com
+```
+
+**Enable in `config/logman.php`:**
+
+```php
+'mail' => [
+    'enabled' => true,
+    ...
+],
+```
+
+Multiple recipients: use comma-separated emails in `LOGMAN_MAIL_TO`.
+
+---
+
+### Per-Channel Auto-Report
+
+Each channel has its own `auto_report_exceptions` flag. A channel can be `enabled` but not auto-report — useful if you only want to send manually via the log viewer's "Send to Channel" button:
+
+```php
+'slack'    => ['enabled' => true,  'auto_report_exceptions' => true],   // auto + manual
+'mail'     => ['enabled' => true,  'auto_report_exceptions' => false],  // manual only
+```
+
+---
 
 ### Rate Limiting
 
@@ -119,20 +226,6 @@ php artisan vendor:publish --tag=logman-views
 When an error is re-sent after being rate-limited, the notification includes:
 
 > This error was suppressed 5 time(s) since last report (rate limited).
-
-### Slack Channel Config
-
-If your app doesn't already define a `slack` logging channel, Logman creates one automatically:
-
-```php
-'slack_channel_config' => [
-    'driver'   => 'slack',
-    'url'      => env('LOG_SLACK_WEBHOOK_URL'),
-    'username' => 'Exception Bot',
-    'emoji'    => ':boom:',
-    'level'    => 'error',
-],
-```
 
 ### Log Viewer Options
 
@@ -179,8 +272,8 @@ try {
     Logman::logException($e);
 }
 
-// Send an info message
-Logman::slackLogInfo('Deployment completed successfully');
+// Send an info message to all enabled channels
+Logman::sendInfo('Deployment completed successfully');
 ```
 
 ### Ignoring Exceptions
@@ -249,21 +342,70 @@ Logman has **zero impact** on normal requests (no exceptions). When an exception
 
 ## Security
 
-For production, add authentication middleware to protect the log viewer:
+For production, add authentication middleware and/or an authorize callback:
 
 ```php
 // config/logman.php
 'log_viewer' => [
     'middleware' => ['web', 'auth'],
+    'authorize' => fn ($request) => $request->user()?->isAdmin(),
 ],
 ```
 
 ---
 
-## Roadmap
+## Custom Channels
 
-- [ ] Multi-channel notifications (Telegram, Discord, Email)
-- [ ] Custom notification channels
+Register your own notification channel:
+
+```php
+use Mhamed\Logman\Channels\ChannelInterface;
+
+class PagerDutyChannel implements ChannelInterface
+{
+    public function sendException(array $payload): void { /* ... */ }
+    public function sendInfo(string $message, array $context): void { /* ... */ }
+}
+```
+
+Register it in a service provider:
+
+```php
+use Mhamed\Logman\LogmanService;
+
+LogmanService::registerDriver('pagerduty', PagerDutyChannel::class);
+```
+
+Then add it to your config:
+
+```php
+'channels' => [
+    'pagerduty' => [
+        'enabled' => true,
+        'driver' => \App\Channels\PagerDutyChannel::class,
+    ],
+],
+```
+
+---
+
+## Artisan Commands
+
+| Command | Description |
+|---|---|
+| `logman:test` | Send a test notification to all enabled channels |
+| `logman:mute "ClassName" --duration=1d` | Mute an exception from CLI |
+| `logman:list-mutes` | List all active mutes |
+| `logman:clear-mutes` | Remove all active mutes |
+| `logman:digest` | Send a daily digest summary to all enabled channels |
+| `logman:digest --date=2026-04-12` | Digest for a specific date |
+| `logman:digest --channel=slack` | Send digest to a specific channel only |
+
+Schedule it in your `routes/console.php` or `app/Console/Kernel.php`:
+
+```php
+$schedule->command('logman:digest')->dailyAt('09:00');
+```
 
 ---
 

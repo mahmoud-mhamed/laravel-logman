@@ -5,6 +5,12 @@ namespace Mhamed\Logman;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\ServiceProvider;
+use Mhamed\Logman\Console\Commands\LogmanClearMutesCommand;
+use Mhamed\Logman\Console\Commands\LogmanDigestCommand;
+use Mhamed\Logman\Console\Commands\LogmanListMutesCommand;
+use Mhamed\Logman\Console\Commands\LogmanMuteCommand;
+use Mhamed\Logman\Console\Commands\LogmanTestCommand;
+use Mhamed\Logman\Http\Middleware\AuthorizeLogman;
 use Mhamed\Logman\Services\MuteService;
 use Throwable;
 
@@ -38,7 +44,17 @@ class LogmanServiceProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'logman');
 
         if (config('logman.log_viewer.enabled', true)) {
-            $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+            $this->registerRoutes();
+        }
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                LogmanTestCommand::class,
+                LogmanMuteCommand::class,
+                LogmanListMutesCommand::class,
+                LogmanClearMutesCommand::class,
+                LogmanDigestCommand::class,
+            ]);
         }
 
         $this->ensureStorageDirectory();
@@ -47,6 +63,19 @@ class LogmanServiceProvider extends ServiceProvider
         if (config('logman.auto_report_exceptions')) {
             $this->registerExceptionReporting();
         }
+    }
+
+    protected function registerRoutes(): void
+    {
+        $middleware = config('logman.log_viewer.middleware', ['web']);
+
+        if (config('logman.log_viewer.authorize') !== null) {
+            $middleware[] = AuthorizeLogman::class;
+        }
+
+        $this->app['router']->middlewareGroup('logman', $middleware);
+
+        $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
     }
 
     protected function ensureStorageDirectory(): void
@@ -61,7 +90,7 @@ class LogmanServiceProvider extends ServiceProvider
 
     protected function injectSlackChannelIfMissing(): void
     {
-        $channelName = config('logman.log_channel', 'slack');
+        $channelName = config('logman.channels.slack.log_channel', 'slack');
 
         if (config("logging.channels.{$channelName}") === null) {
             $channelConfig = config('logman.slack_channel_config', []);

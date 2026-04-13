@@ -79,10 +79,22 @@
             <div class="summary-card">
                 <div class="big-num">{{ number_format($today_total) }}</div>
                 <div class="label">Today Entries</div>
+                @if(!empty($comparison['total']))
+                    <div style="font-size:12px;margin-top:4px;font-weight:600;color:{{ $comparison['total']['direction'] === 'up' ? 'var(--danger-text)' : ($comparison['total']['direction'] === 'down' ? 'var(--debug-text)' : 'var(--text-muted)') }};">
+                        {!! $comparison['total']['direction'] === 'up' ? '&#9650;' : ($comparison['total']['direction'] === 'down' ? '&#9660;' : '&#8212;') !!}
+                        {{ $comparison['total']['pct'] }}% vs yesterday ({{ $yesterday_total }})
+                    </div>
+                @endif
             </div>
             <div class="summary-card">
                 <div class="big-num" style="color: var(--danger-text);">{{ $todayErrors }}</div>
                 <div class="label">Today Errors & Above</div>
+                @if(!empty($comparison['errors']))
+                    <div style="font-size:12px;margin-top:4px;font-weight:600;color:{{ $comparison['errors']['direction'] === 'up' ? 'var(--danger-text)' : ($comparison['errors']['direction'] === 'down' ? 'var(--debug-text)' : 'var(--text-muted)') }};">
+                        {!! $comparison['errors']['direction'] === 'up' ? '&#9650;' : ($comparison['errors']['direction'] === 'down' ? '&#9660;' : '&#8212;') !!}
+                        {{ $comparison['errors']['pct'] }}% vs yesterday
+                    </div>
+                @endif
             </div>
             @foreach(['warning', 'info', 'debug'] as $tl)
                 @if(($today_counts[$tl] ?? 0) > 0)

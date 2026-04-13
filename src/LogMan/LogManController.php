@@ -5,6 +5,7 @@ namespace Mhamed\Logman\LogMan;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Response;
+use Mhamed\Logman\Channels\ChannelInterface;
 use Mhamed\Logman\Services\MuteService;
 
 class LogManController extends Controller
@@ -56,6 +57,11 @@ class LogManController extends Controller
             );
         }
 
+        $enabledChannels = collect(config('logman.channels', []))
+            ->filter(fn($settings) => !empty($settings['enabled']))
+            ->keys()
+            ->all();
+
         return view('logman::logman', [
             'files' => $files,
             'selectedFile' => $selectedFile,
@@ -76,6 +82,7 @@ class LogManController extends Controller
             'hasMultipleDates' => $logData['has_multiple_dates'],
             'activeMutes' => $activeMutes,
             'activeThrottles' => $activeThrottles,
+            'enabledChannels' => $enabledChannels,
         ]);
     }
 
@@ -302,20 +309,39 @@ class LogManController extends Controller
     {
         $config = config('logman');
 
+        $channels = $config['channels'] ?? [];
+
         // Organize into sections
         $sections = [
             'Reporting' => [
                 ['key' => 'enable_production', 'label' => 'Enable in Production', 'value' => $config['enable_production'] ?? false, 'type' => 'bool', 'description' => 'Send exception reports when app is in production'],
                 ['key' => 'enable_local', 'label' => 'Enable in Local', 'value' => $config['enable_local'] ?? false, 'type' => 'bool', 'description' => 'Send exception reports when app is in local environment'],
                 ['key' => 'auto_report_exceptions', 'label' => 'Auto-Report Exceptions', 'value' => $config['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Automatically register in exception handler'],
-                ['key' => 'log_channel', 'label' => 'Log Channel', 'value' => $config['log_channel'] ?? 'slack', 'type' => 'string', 'description' => 'Logging channel used to send messages'],
             ],
-            'Slack Channel' => [
-                ['key' => 'slack_channel_config.driver', 'label' => 'Driver', 'value' => $config['slack_channel_config']['driver'] ?? '-', 'type' => 'string', 'description' => 'Logging driver'],
+            'Channel: Slack' => [
+                ['key' => 'channels.slack.enabled', 'label' => 'Enabled', 'value' => $channels['slack']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Enable Slack notifications'],
+                ['key' => 'channels.slack.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['slack']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions to this channel'],
+                ['key' => 'channels.slack.log_channel', 'label' => 'Log Channel', 'value' => $channels['slack']['log_channel'] ?? 'slack', 'type' => 'string', 'description' => 'Laravel logging channel name'],
                 ['key' => 'slack_channel_config.url', 'label' => 'Webhook URL', 'value' => !empty($config['slack_channel_config']['url']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Slack incoming webhook URL (LOG_SLACK_WEBHOOK_URL)'],
                 ['key' => 'slack_channel_config.username', 'label' => 'Bot Username', 'value' => $config['slack_channel_config']['username'] ?? '-', 'type' => 'string', 'description' => 'Display name for the Slack bot'],
                 ['key' => 'slack_channel_config.emoji', 'label' => 'Bot Emoji', 'value' => $config['slack_channel_config']['emoji'] ?? '-', 'type' => 'string', 'description' => 'Emoji icon for the bot'],
-                ['key' => 'slack_channel_config.level', 'label' => 'Minimum Level', 'value' => $config['slack_channel_config']['level'] ?? 'error', 'type' => 'string', 'description' => 'Minimum log level to send'],
+            ],
+            'Channel: Telegram' => [
+                ['key' => 'channels.telegram.enabled', 'label' => 'Enabled', 'value' => $channels['telegram']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Enable Telegram notifications'],
+                ['key' => 'channels.telegram.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['telegram']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions to this channel'],
+                ['key' => 'channels.telegram.bot_token', 'label' => 'Bot Token', 'value' => !empty($channels['telegram']['bot_token']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Telegram bot token (LOGMAN_TELEGRAM_BOT_TOKEN)'],
+                ['key' => 'channels.telegram.chat_id', 'label' => 'Chat ID', 'value' => !empty($channels['telegram']['chat_id']) ? $channels['telegram']['chat_id'] : 'NOT SET', 'type' => !empty($channels['telegram']['chat_id']) ? 'string' : 'status', 'description' => 'Telegram chat/group ID (LOGMAN_TELEGRAM_CHAT_ID)'],
+            ],
+            'Channel: Discord' => [
+                ['key' => 'channels.discord.enabled', 'label' => 'Enabled', 'value' => $channels['discord']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Enable Discord notifications'],
+                ['key' => 'channels.discord.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['discord']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions to this channel'],
+                ['key' => 'channels.discord.webhook_url', 'label' => 'Webhook URL', 'value' => !empty($channels['discord']['webhook_url']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Discord webhook URL (LOGMAN_DISCORD_WEBHOOK)'],
+            ],
+            'Channel: Mail' => [
+                ['key' => 'channels.mail.enabled', 'label' => 'Enabled', 'value' => $channels['mail']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Enable email notifications'],
+                ['key' => 'channels.mail.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['mail']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions to this channel'],
+                ['key' => 'channels.mail.to', 'label' => 'Recipients', 'value' => array_filter((array) ($channels['mail']['to'] ?? [])), 'type' => 'list', 'description' => 'Email addresses to receive notifications (LOGMAN_MAIL_TO)'],
+                ['key' => 'channels.mail.from', 'label' => 'From', 'value' => $channels['mail']['from'] ?? config('mail.from.address') ?? '-', 'type' => 'string', 'description' => 'Sender address (LOGMAN_MAIL_FROM)'],
             ],
             'Rate Limiting' => [
                 ['key' => 'rate_limit.enabled', 'label' => 'Enabled', 'value' => $config['rate_limit']['enabled'] ?? true, 'type' => 'bool', 'description' => 'Prevent the same exception from flooding notifications'],
@@ -329,8 +355,9 @@ class LogManController extends Controller
             ],
             'Log Viewer' => [
                 ['key' => 'log_viewer.enabled', 'label' => 'Enabled', 'value' => $config['log_viewer']['enabled'] ?? true, 'type' => 'bool', 'description' => 'Enable or disable log viewer routes'],
-                ['key' => 'log_viewer.route_prefix', 'label' => 'Route Prefix', 'value' => $config['log_viewer']['route_prefix'] ?? 'log-viewer', 'type' => 'string', 'description' => 'URL prefix for the log viewer'],
+                ['key' => 'log_viewer.route_prefix', 'label' => 'Route Prefix', 'value' => $config['log_viewer']['route_prefix'] ?? 'logman', 'type' => 'string', 'description' => 'URL prefix for the log viewer'],
                 ['key' => 'log_viewer.middleware', 'label' => 'Middleware', 'value' => $config['log_viewer']['middleware'] ?? [], 'type' => 'list', 'description' => 'Middleware applied to log viewer routes'],
+                ['key' => 'log_viewer.authorize', 'label' => 'Authorize', 'value' => $config['log_viewer']['authorize'] !== null ? 'Custom callback' : 'None (open)', 'type' => $config['log_viewer']['authorize'] !== null ? 'string' : 'status', 'description' => 'Authorization callback for access control'],
                 ['key' => 'log_viewer.storage_path', 'label' => 'Logs Path', 'value' => $config['log_viewer']['storage_path'] ?? '-', 'type' => 'path', 'description' => 'Path to Laravel log files directory'],
                 ['key' => 'log_viewer.pattern', 'label' => 'File Pattern', 'value' => $config['log_viewer']['pattern'] ?? '*.log', 'type' => 'string', 'description' => 'Glob pattern for matching log files'],
                 ['key' => 'log_viewer.max_file_size', 'label' => 'Max File Size', 'value' => $this->formatFileSize($config['log_viewer']['max_file_size'] ?? 52428800), 'type' => 'string', 'description' => 'Maximum log file size to display in browser'],
@@ -347,6 +374,88 @@ class LogManController extends Controller
         return view('logman::config', [
             'sections' => $sections,
         ]);
+    }
+
+    // ─── Send to Channel ─────────────────────────────────────
+
+    public function sendToChannel(Request $request)
+    {
+        $file = $request->get('file');
+        $hash = $request->get('hash');
+        $channelName = $request->get('channel');
+
+        if (!$file || !$hash || !$channelName) {
+            return back()->with('error', 'Missing parameters.');
+        }
+
+        $channelConfig = config("logman.channels.{$channelName}");
+        if (!$channelConfig || empty($channelConfig['enabled'])) {
+            return back()->with('error', "Channel '{$channelName}' is not enabled.");
+        }
+
+        // Find the log entry by hash
+        $entry = $this->viewer->findEntryByHash($file, $hash);
+        if (!$entry) {
+            return back()->with('error', 'Log entry not found.');
+        }
+
+        // Build a payload from the log entry
+        $payload = [
+            'app' => config('app.name'),
+            'env' => $entry['env'],
+            'suppressed_count' => 0,
+            'exception' => [
+                'class' => $entry['exception_class'] ?: 'Unknown',
+                'message' => $entry['exception_message'] ?? $entry['message'],
+                'file' => $entry['exception_file'] ?? '-',
+                'line' => $entry['exception_line'] ?? 0,
+                'code' => null,
+                'previous' => 'None',
+                'trace' => $entry['stack'] ?: '-',
+            ],
+            'auth' => null,
+            'request' => null,
+            'cli' => null,
+            'job' => null,
+            'queries' => [],
+            'environment' => [
+                'env' => $entry['env'],
+                'time' => $entry['date'],
+                'php' => PHP_VERSION,
+                'laravel' => app()->version(),
+                'memory' => '-',
+                'hostname' => gethostname() ?: '-',
+                'git_commit' => '-',
+                'app_url' => config('app.url'),
+            ],
+        ];
+
+        // Resolve the channel driver
+        $drivers = [
+            'slack' => \Mhamed\Logman\Channels\SlackChannel::class,
+            'telegram' => \Mhamed\Logman\Channels\TelegramChannel::class,
+            'discord' => \Mhamed\Logman\Channels\DiscordChannel::class,
+            'mail' => \Mhamed\Logman\Channels\MailChannel::class,
+        ];
+
+        $driverClass = $channelConfig['driver'] ?? ($drivers[$channelName] ?? null);
+
+        if (!$driverClass || !class_exists($driverClass)) {
+            return back()->with('error', "Driver not found for channel '{$channelName}'.");
+        }
+
+        $driver = new $driverClass();
+
+        if (!$driver instanceof ChannelInterface) {
+            return back()->with('error', "Invalid driver for channel '{$channelName}'.");
+        }
+
+        try {
+            $driver->sendException($payload);
+            return back()->with('success', "Sent to " . ucfirst($channelName) . " successfully.");
+        } catch (\Throwable $e) {
+            return back()->with('error', "Failed to send to {$channelName}: " . $e->getMessage());
+        }
     }
 
     protected function formatFileSize(int $bytes): string

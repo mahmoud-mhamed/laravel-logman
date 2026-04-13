@@ -25,13 +25,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Log Channel
-    |--------------------------------------------------------------------------
-    */
-    'log_channel' => 'slack',
-
-    /*
-    |--------------------------------------------------------------------------
     | Ignored Exceptions
     |--------------------------------------------------------------------------
     */
@@ -44,8 +37,51 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Slack Channel Config
+    | Notification Channels
     |--------------------------------------------------------------------------
+    |
+    | Enable one or more channels to receive exception notifications.
+    | Each channel can be enabled/disabled independently.
+    |
+    */
+    'channels' => [
+
+        'slack' => [
+            'enabled' => true,
+            'auto_report_exceptions' => true,
+            'log_channel' => 'slack', // Laravel logging channel name
+        ],
+
+        'telegram' => [
+            'enabled' => false,
+            'auto_report_exceptions' => true,
+            'bot_token' => env('LOGMAN_TELEGRAM_BOT_TOKEN'),
+            'chat_id' => env('LOGMAN_TELEGRAM_CHAT_ID'),
+        ],
+
+        'discord' => [
+            'enabled' => false,
+            'auto_report_exceptions' => true,
+            'webhook_url' => env('LOGMAN_DISCORD_WEBHOOK'),
+        ],
+
+        'mail' => [
+            'enabled' => false,
+            'auto_report_exceptions' => true,
+            'to' => explode(',', env('LOGMAN_MAIL_TO', '')),  // array of emails
+            'from' => env('LOGMAN_MAIL_FROM'),                // null = use default mail.from
+        ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Slack Channel Config (auto-injected into logging.channels)
+    |--------------------------------------------------------------------------
+    |
+    | If your app doesn't already define the logging channel above,
+    | Logman will create it automatically using this config.
+    |
     */
     'slack_channel_config' => [
         'driver' => 'slack',
@@ -96,6 +132,11 @@ return [
         // Middleware applied to log viewer routes
         // Add 'auth' for production: ['web', 'auth']
         'middleware' => ['web'],
+
+        // Authorization callback — return true to allow access, false to deny.
+        // Set to null to allow all authenticated users (when using 'auth' middleware).
+        // Example: fn ($request) => $request->user()?->isAdmin()
+        'authorize' => null,
 
         // Path to the log files directory
         'storage_path' => storage_path('logs'),

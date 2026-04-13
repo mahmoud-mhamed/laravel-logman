@@ -77,7 +77,21 @@ class MuteService
         $flags = $pretty
             ? JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
             : 0;
-        File::put($path, json_encode($data, $flags));
+        $json = json_encode($data, $flags);
+
+        $handle = fopen($path, 'c');
+        if ($handle && flock($handle, LOCK_EX)) {
+            ftruncate($handle, 0);
+            fwrite($handle, $json);
+            fflush($handle);
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        } else {
+            if ($handle) {
+                fclose($handle);
+            }
+            File::put($path, $json);
+        }
     }
 
     // ─── Mute Operations ───────────────────────────────────────

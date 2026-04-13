@@ -403,10 +403,13 @@ class LogManService
             $totalEntries += array_sum($counts);
         }
 
-        // Today's stats
+        // Today's & yesterday's stats
         $today = date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('yesterday'));
         $todayCounts = [];
         $todayTotal = 0;
+        $yesterdayCounts = [];
+        $yesterdayTotal = 0;
 
         foreach ($files as $file) {
             $path = $this->safePath($file['name']);
@@ -416,12 +419,27 @@ class LogManService
 
             $entries = $this->getCachedEntries($file['name'], $path);
             foreach ($entries as $entry) {
-                if (str_starts_with($entry['date'], $today)) {
-                    $l = $entry['level'];
+                $entryDate = substr($entry['date'], 0, 10);
+                $l = $entry['level'];
+
+                if ($entryDate === $today) {
                     $todayCounts[$l] = ($todayCounts[$l] ?? 0) + 1;
                     $todayTotal++;
+                } elseif ($entryDate === $yesterday) {
+                    $yesterdayCounts[$l] = ($yesterdayCounts[$l] ?? 0) + 1;
+                    $yesterdayTotal++;
                 }
             }
+        }
+
+        // Comparison
+        $comparison = [];
+        if ($yesterdayTotal > 0) {
+            $comparison['total'] = $this->calcChange($todayTotal, $yesterdayTotal);
+
+            $todayErrors = ($todayCounts['error'] ?? 0) + ($todayCounts['critical'] ?? 0) + ($todayCounts['alert'] ?? 0) + ($todayCounts['emergency'] ?? 0);
+            $yesterdayErrors = ($yesterdayCounts['error'] ?? 0) + ($yesterdayCounts['critical'] ?? 0) + ($yesterdayCounts['alert'] ?? 0) + ($yesterdayCounts['emergency'] ?? 0);
+            $comparison['errors'] = $this->calcChange($todayErrors, $yesterdayErrors);
         }
 
         return [
@@ -436,6 +454,9 @@ class LogManService
             'chart_data' => $this->buildChartData($globalCounts),
             'today_counts' => $todayCounts,
             'today_total' => $todayTotal,
+            'yesterday_counts' => $yesterdayCounts,
+            'yesterday_total' => $yesterdayTotal,
+            'comparison' => $comparison,
         ];
     }
 
@@ -469,6 +490,16 @@ class LogManService
             'data' => $data,
             'colors' => $bgColors,
         ];
+    }
+
+    protected function calcChange(int $current, int $previous): array
+    {
+        if ($previous === 0) {
+            return ['pct' => $current > 0 ? 100 : 0, 'direction' => $current > 0 ? 'up' : 'same'];
+        }
+        $pct = round((($current - $previous) / $previous) * 100);
+        $direction = $pct > 0 ? 'up' : ($pct < 0 ? 'down' : 'same');
+        return ['pct' => abs($pct), 'direction' => $direction, 'previous' => $previous];
     }
 
     // ─── Helpers ────────────────────────────────────────────────
@@ -710,6 +741,24 @@ class LogManService
 
             if ($classMatch && $patternMatch) {
                 return $throttle;
+            }
+        }
+
+        return null;
+    }
+
+    public function findEntryByHash(string $filename, string $hash): ?array
+    {
+        $path = $this->safePath($filename);
+        if (!$path || !File::exists($path) || File::size($path) > $this->maxFileSize) {
+            return null;
+        }
+
+        $entries = $this->getCachedEntries($filename, $path);
+
+        foreach ($entries as $entry) {
+            if ($entry['hash'] === $hash) {
+                return $entry;
             }
         }
 

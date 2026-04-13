@@ -5,7 +5,7 @@ use Mhamed\Logman\LogMan\LogManController;
 
 Route::group([
     'prefix' => config('logman.log_viewer.route_prefix', 'logman'),
-    'middleware' => config('logman.log_viewer.middleware', ['web']),
+    'middleware' => 'logman',
 ], function () {
     Route::get('/', [LogManController::class, 'index'])->name('logman.index');
     Route::get('/analysis', [LogManController::class, 'dashboard'])->name('logman.dashboard');
@@ -33,6 +33,9 @@ Route::group([
     Route::post('/unthrottle', [LogManController::class, 'unthrottle'])->name('logman.unthrottle');
     Route::post('/unthrottle-all', [LogManController::class, 'unthrottleAll'])->name('logman.unthrottle-all');
     Route::post('/unthrottle-multiple', [LogManController::class, 'unthrottleMultiple'])->name('logman.unthrottle-multiple');
+
+    // Send to channel
+    Route::post('/send-to-channel', [LogManController::class, 'sendToChannel'])->name('logman.send-to-channel');
 
     // Config
     Route::get('/config', [LogManController::class, 'config'])->name('logman.config');
