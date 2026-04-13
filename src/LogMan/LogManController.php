@@ -664,6 +664,31 @@ class LogManController extends Controller
         return redirect()->route('logman.bookmarks')->with('success', 'All bookmarks cleared.');
     }
 
+    // ─── Clear All ─────────────────────────────────────────
+
+    public function clearAll(MuteService $muteService)
+    {
+        // Delete all log files
+        $files = $this->viewer->getFiles();
+        $fileNames = $files->pluck('name')->toArray();
+        $deletedFiles = $this->viewer->deleteMultiple($fileNames);
+
+        // Clear all mutes
+        foreach ($muteService->getMutes() as $mute) {
+            $muteService->unmute($mute['id']);
+        }
+
+        // Clear all throttles
+        foreach ($muteService->getThrottles() as $throttle) {
+            $muteService->removeThrottle($throttle['id']);
+        }
+
+        // Clear all bookmarks
+        $this->viewer->clearAllBookmarks();
+
+        return redirect()->route('logman.index')->with('success', "Cleared all: {$deletedFiles} file(s), mutes, throttles, and bookmarks removed.");
+    }
+
     // ─── About ─────────────────────────────────────────────
 
     public function about()

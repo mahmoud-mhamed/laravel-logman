@@ -49,6 +49,9 @@ Route::group([
     Route::post('/clear-bookmarks', [LogManController::class, 'clearBookmarks'])->name('logman.clear-bookmarks');
     Route::get('/bookmarks', [LogManController::class, 'bookmarks'])->name('logman.bookmarks');
 
+    // Clear All
+    Route::post('/clear-all', [LogManController::class, 'clearAll'])->name('logman.clear-all');
+
     // Config & About
     Route::get('/config', [LogManController::class, 'config'])->name('logman.config');
     Route::get('/about', [LogManController::class, 'about'])->name('logman.about');

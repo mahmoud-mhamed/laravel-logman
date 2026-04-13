@@ -83,7 +83,7 @@
         .log-table { width: 100%; border-collapse: collapse; }
         .log-table th { position: sticky; top: 0; background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 10px 12px; text-align: left; font-size: 10px; text-transform: uppercase; color: var(--text-light); font-weight: 700; letter-spacing: 0.08em; z-index: 1; }
         .log-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-light); vertical-align: top; }
-        .log-row { cursor: pointer; transition: all 0.1s ease; }
+        .log-row { cursor: pointer; transition: all 0.1s ease; user-select: none; -webkit-user-select: none; }
         .log-row.no-details { cursor: default; }
         .log-row:hover td { background: var(--primary-light); font-weight: 600; text-decoration: underline; }
         .log-row.level-danger td { background: var(--danger-bg); }
@@ -202,9 +202,14 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h3>Files ({{ $files->count() }})</h3>
-                <button class="btn btn-sm btn-danger" onclick="deleteSelected()" title="Delete selected" id="deleteSelectedBtn" style="display:none;">
-                    Delete Selected
-                </button>
+                <div style="display:flex;gap:4px;align-items:center;">
+                    <button class="btn btn-sm btn-danger" onclick="openClearAllModal()" title="Clear all files, mutes, throttles & bookmarks">
+                        Clear All
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteSelected()" title="Delete selected" id="deleteSelectedBtn" style="display:none;">
+                        Delete Selected
+                    </button>
+                </div>
             </div>
             <div class="sidebar-tools">
                 <input type="text" class="sidebar-search" placeholder="Filter files..." oninput="filterFiles(this.value)">
@@ -1137,6 +1142,37 @@ document.addEventListener('click', function(e) {
         </form>
     </div>
 </div>
+
+{{-- Clear All Modal --}}
+<div class="modal-overlay" id="clearAllModal" onclick="if(event.target===this)closeClearAllModal()">
+    <div class="modal">
+        <h3 style="color:var(--danger);">Clear All Data</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">This action will permanently delete:</p>
+        <ul style="font-size:13px;color:var(--text);margin:0 0 16px 18px;line-height:1.8;">
+            <li><strong>{{ $files->count() }}</strong> log file(s)</li>
+            <li>All active <strong>mutes</strong></li>
+            <li>All active <strong>throttles</strong></li>
+            <li>All saved <strong>bookmarks</strong></li>
+        </ul>
+        <p style="font-size:12px;color:var(--danger);margin-bottom:16px;">This cannot be undone.</p>
+        <form method="POST" action="{{ route('logman.clear-all') }}">
+            @csrf
+            <div class="modal-actions">
+                <button type="button" class="btn btn-sm" onclick="closeClearAllModal()">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-danger">Yes, Clear All</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openClearAllModal() {
+    document.getElementById('clearAllModal').classList.add('open');
+}
+function closeClearAllModal() {
+    document.getElementById('clearAllModal').classList.remove('open');
+}
+</script>
 
 </body>
 </html>
