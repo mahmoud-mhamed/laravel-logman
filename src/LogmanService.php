@@ -41,18 +41,21 @@ class LogmanService
                 return;
             }
 
-            $payload = $this->buildPayload($throwable);
             $resolvedChannels = $this->resolveChannels(exceptionsOnly: true, level: 'error');
-            $throttleKey = md5(get_class($throwable) . '|' . $throwable->getFile() . '|' . $throwable->getLine());
 
             if (empty($resolvedChannels)) {
                 return;
             }
 
+            $throttleKey = md5(get_class($throwable) . '|' . $throwable->getFile() . '|' . $throwable->getLine());
+            $payload = null;
+
             foreach ($resolvedChannels as $ch) {
                 if ($this->isChannelThrottled($ch['name'], $throttleKey, $ch['settings']['throttle'] ?? 0)) {
                     continue;
                 }
+                // Build payload lazily — only if at least one channel will send
+                $payload ??= $this->buildPayload($throwable);
                 $this->dispatchToChannel($ch, 'exception', $payload);
             }
         } catch (Throwable $e) {
@@ -99,6 +102,7 @@ class LogmanService
     // ─── Channel Resolution ────────────────────────────────────
 
     protected static array $channelInstances = [];
+    protected static ?string $cachedGitCommit = null;
 
     /**
      * Resolve enabled channels with their settings.
@@ -448,21 +452,23 @@ class LogmanService
 
     protected function collectEnvironment(): array
     {
-        $gitCommit = '-';
-        try {
-            $base = base_path();
-            $headFile = $base . '/.git/HEAD';
-            if (is_file($headFile)) {
-                $head = trim(file_get_contents($headFile));
-                if (str_starts_with($head, 'ref: ')) {
-                    $refFile = $base . '/.git/' . substr($head, 5);
-                    $gitCommit = is_file($refFile) ? substr(trim(file_get_contents($refFile)), 0, 8) : '-';
-                } else {
-                    $gitCommit = substr($head, 0, 8);
+        if (static::$cachedGitCommit === null) {
+            static::$cachedGitCommit = '-';
+            try {
+                $base = base_path();
+                $headFile = $base . '/.git/HEAD';
+                if (is_file($headFile)) {
+                    $head = trim(file_get_contents($headFile));
+                    if (str_starts_with($head, 'ref: ')) {
+                        $refFile = $base . '/.git/' . substr($head, 5);
+                        static::$cachedGitCommit = is_file($refFile) ? substr(trim(file_get_contents($refFile)), 0, 8) : '-';
+                    } else {
+                        static::$cachedGitCommit = substr($head, 0, 8);
+                    }
                 }
+            } catch (Throwable $e) {
+                // ignore
             }
-        } catch (Throwable $e) {
-            // ignore
         }
 
         return [
@@ -472,7 +478,7 @@ class LogmanService
             'laravel' => app()->version(),
             'memory' => round(memory_get_peak_usage(true) / 1024 / 1024, 2) . ' MB',
             'hostname' => gethostname() ?: '-',
-            'git_commit' => $gitCommit,
+            'git_commit' => static::$cachedGitCommit,
             'app_url' => config('app.url'),
         ];
     }

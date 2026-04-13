@@ -61,7 +61,7 @@ return [
     'channels' => [
 
         'slack' => [
-            'enabled' => true,
+            'enabled' => false,
             'auto_report_exceptions' => true,
             'daily_digest' => true,         // Include in daily digest
             // Levels: debug, info, notice, warning, error, critical, alert, emergency

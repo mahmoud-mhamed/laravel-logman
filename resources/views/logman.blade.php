@@ -942,17 +942,26 @@ function closeReviewModal() {
 
 // ─── Mute Dropdown ─────────────────────────────────────────
 function toggleMuteDropdown(btn) {
-    const dropdown = btn.parentElement.querySelector('.mute-dropdown');
+    // Check if this button already has an open dropdown (moved to body)
+    let dropdown = btn._openDropdown || btn.parentElement.querySelector('.mute-dropdown');
     if (!dropdown) return;
 
+    // Close all other open dropdowns first
     document.querySelectorAll('.mute-dropdown.open').forEach(d => {
-        if (d !== dropdown) d.classList.remove('open');
+        if (d !== dropdown) {
+            d.classList.remove('open');
+            if (d._muteBtn) {
+                d._muteBtn.parentElement.appendChild(d);
+                d._muteBtn._openDropdown = null;
+            }
+        }
     });
 
     if (!dropdown.classList.contains('open')) {
         // Move dropdown to body so it's not clipped by overflow
         document.body.appendChild(dropdown);
         dropdown._muteBtn = btn;
+        btn._openDropdown = dropdown;
         dropdown.classList.add('open');
 
         const rect = btn.getBoundingClientRect();
@@ -970,6 +979,7 @@ function toggleMuteDropdown(btn) {
         // Move back to original parent
         if (dropdown._muteBtn) {
             dropdown._muteBtn.parentElement.appendChild(dropdown);
+            dropdown._muteBtn._openDropdown = null;
         }
     }
 }
@@ -1004,6 +1014,7 @@ document.addEventListener('click', function(e) {
             d.classList.remove('open');
             if (d._muteBtn) {
                 d._muteBtn.parentElement.appendChild(d);
+                d._muteBtn._openDropdown = null;
             }
         });
     }
