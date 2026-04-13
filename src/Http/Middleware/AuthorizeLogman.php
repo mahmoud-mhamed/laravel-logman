@@ -12,6 +12,14 @@ class AuthorizeLogman
     {
         $authorize = config('logman.log_viewer.authorize');
 
+        if ($authorize === null) {
+            // No callback configured — block access outside local env
+            if (!app()->isLocal()) {
+                abort(403);
+            }
+            return $next($request);
+        }
+
         if (is_callable($authorize) && !$authorize($request)) {
             abort(403);
         }

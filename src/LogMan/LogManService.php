@@ -350,10 +350,16 @@ class LogManService
         if ($isRegex) {
             $regexValid = @preg_match('/' . $search . '/i', '') !== false;
             if ($regexValid) {
-                return array_filter($entries, function ($entry) use ($search) {
+                $oldLimit = ini_get('pcre.backtrack_limit');
+                ini_set('pcre.backtrack_limit', 10000);
+
+                $filtered = array_filter($entries, function ($entry) use ($search) {
                     $text = $entry['message'] . ' ' . $entry['stack'];
-                    return preg_match('/' . $search . '/i', $text);
+                    return @preg_match('/' . $search . '/i', $text) === 1;
                 });
+
+                ini_set('pcre.backtrack_limit', $oldLimit);
+                return $filtered;
             }
         }
 

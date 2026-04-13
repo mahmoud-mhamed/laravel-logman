@@ -37,6 +37,7 @@ Route::group([
     // Send to channel
     Route::post('/send-to-channel', [LogManController::class, 'sendToChannel'])->name('logman.send-to-channel');
 
-    // Config
+    // Config & About
     Route::get('/config', [LogManController::class, 'config'])->name('logman.config');
+    Route::get('/about', [LogManController::class, 'about'])->name('logman.about');
 });

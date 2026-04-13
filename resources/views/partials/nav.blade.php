@@ -26,6 +26,10 @@
            class="{{ request()->routeIs('logman.config') ? 'active' : '' }}">
             <span class="nav-text">Config</span>
         </a>
+        <a href="{{ route('logman.about') }}"
+           class="{{ request()->routeIs('logman.about') ? 'active' : '' }}">
+            <span class="nav-text">About</span>
+        </a>
     </div>
 
     <div class="nav-right">

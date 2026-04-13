@@ -69,7 +69,7 @@ class LogmanServiceProvider extends ServiceProvider
     {
         $middleware = config('logman.log_viewer.middleware', ['web']);
 
-        if (config('logman.log_viewer.authorize') !== null) {
+        if (config('logman.log_viewer.authorize') !== null || !app()->isLocal()) {
             $middleware[] = AuthorizeLogman::class;
         }
 

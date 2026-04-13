@@ -39,6 +39,10 @@ class LogManController extends Controller
         $reviewFilter = $request->get('review') ?: null;
         $reviewStatus = $request->get('review_status') ?: null;
         $perPage = (int) $request->get('per_page', config('logman.log_viewer.per_page', 25));
+        $allowedOptions = config('logman.log_viewer.per_page_options', [15, 25, 50, 100]);
+        if (!in_array($perPage, $allowedOptions)) {
+            $perPage = config('logman.log_viewer.per_page', 25);
+        }
         $page = (int) $request->get('page', 1);
 
         $muteFilter = $request->get('mute_filter') ?: null;
@@ -456,6 +460,24 @@ class LogManController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', "Failed to send to {$channelName}: " . $e->getMessage());
         }
+    }
+
+    // ─── About ─────────────────────────────────────────────
+
+    public function about()
+    {
+        $channels = config('logman.channels', []);
+        $enabledChannels = collect($channels)->filter(fn($ch) => !empty($ch['enabled']))->keys()->all();
+
+        return view('logman::about', [
+            'version' => '1.0.0',
+            'phpVersion' => PHP_VERSION,
+            'laravelVersion' => app()->version(),
+            'environment' => app()->environment(),
+            'enabledChannels' => $enabledChannels,
+            'allChannels' => $channels,
+            'config' => config('logman'),
+        ]);
     }
 
     protected function formatFileSize(int $bytes): string
