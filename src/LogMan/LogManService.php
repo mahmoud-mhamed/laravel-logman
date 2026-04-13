@@ -18,7 +18,7 @@ class LogManService
 
     public function __construct()
     {
-        $config = config('logman.log_viewer');
+        $config = config('logman.viewer');
         $this->storagePath = $config['storage_path'] ?? storage_path('logs');
         $this->pattern = $config['pattern'] ?? '*.log';
         $this->maxFileSize = $config['max_file_size'] ?? 50 * 1024 * 1024;
@@ -364,14 +364,16 @@ class LogManService
     protected function applySearch(array $entries, string $search, bool $isRegex): array
     {
         if ($isRegex) {
-            $regexValid = @preg_match('/' . $search . '/i', '') !== false;
+            // Use \x01 as delimiter to prevent delimiter injection
+            $pattern = "\x01" . $search . "\x01iu";
+            $regexValid = @preg_match($pattern, '') !== false;
             if ($regexValid) {
                 $oldLimit = ini_get('pcre.backtrack_limit');
                 ini_set('pcre.backtrack_limit', 10000);
 
-                $filtered = array_filter($entries, function ($entry) use ($search) {
+                $filtered = array_filter($entries, function ($entry) use ($pattern) {
                     $text = $entry['message'] . ' ' . $entry['stack'];
-                    return @preg_match('/' . $search . '/i', $text) === 1;
+                    return @preg_match($pattern, $text) === 1;
                 });
 
                 ini_set('pcre.backtrack_limit', $oldLimit);
@@ -806,9 +808,18 @@ class LogManService
         return $this->cachedBookmarks;
     }
 
+    protected int $maxBookmarks = 100;
+
     public function addBookmark(string $file, string $hash, array $entry, string $note = ''): void
     {
         $bookmarks = $this->getBookmarks();
+
+        // Prevent duplicate
+        foreach ($bookmarks as $bm) {
+            if ($bm['hash'] === $hash && $bm['file'] === $file) {
+                return;
+            }
+        }
 
         $bookmarks[] = [
             'id' => md5($file . $hash . microtime()),
@@ -822,6 +833,11 @@ class LogManService
             'bookmarked_at' => now()->toDateTimeString(),
         ];
 
+        // Enforce max limit — remove oldest
+        if (count($bookmarks) > $this->maxBookmarks) {
+            $bookmarks = array_slice($bookmarks, -$this->maxBookmarks);
+        }
+
         $this->saveBookmarks($bookmarks);
     }
 
@@ -830,6 +846,11 @@ class LogManService
         $bookmarks = $this->getBookmarks();
         $bookmarks = array_values(array_filter($bookmarks, fn($b) => $b['id'] !== $id));
         $this->saveBookmarks($bookmarks);
+    }
+
+    public function clearAllBookmarks(): void
+    {
+        $this->saveBookmarks([]);
     }
 
     protected function saveBookmarks(array $bookmarks): void

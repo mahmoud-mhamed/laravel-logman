@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Mhamed\Logman\LogMan\LogManController;
 
 Route::group([
-    'prefix' => config('logman.log_viewer.route_prefix', 'logman'),
+    'prefix' => config('logman.viewer.route_prefix', 'logman'),
     'middleware' => 'logman',
 ], function () {
     Route::get('/', [LogManController::class, 'index'])->name('logman.index');
@@ -46,6 +46,7 @@ Route::group([
     // Bookmarks
     Route::post('/bookmark', [LogManController::class, 'bookmark'])->name('logman.bookmark');
     Route::post('/unbookmark', [LogManController::class, 'unbookmark'])->name('logman.unbookmark');
+    Route::post('/clear-bookmarks', [LogManController::class, 'clearBookmarks'])->name('logman.clear-bookmarks');
     Route::get('/bookmarks', [LogManController::class, 'bookmarks'])->name('logman.bookmarks');
 
     // Config & About

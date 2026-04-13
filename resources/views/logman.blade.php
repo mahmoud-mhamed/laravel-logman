@@ -608,7 +608,7 @@
                                 @endif
                             </div>
                             <select class="per-page-select" onchange="setPerPage(this.value)">
-                                @foreach(config('logman.log_viewer.per_page_options', [15,25,50,100]) as $opt)
+                                @foreach(config('logman.viewer.per_page_options', [15,25,50,100]) as $opt)
                                     <option value="{{ $opt }}" {{ $perPage == $opt ? 'selected' : '' }}>{{ $opt }} / page</option>
                                 @endforeach
                             </select>
@@ -618,7 +618,7 @@
                             <span>{{ number_format($entries->total()) }} entries</span>
                             <span>{{ $selectedFile }}</span>
                             <select class="per-page-select" onchange="setPerPage(this.value)">
-                                @foreach(config('logman.log_viewer.per_page_options', [15,25,50,100]) as $opt)
+                                @foreach(config('logman.viewer.per_page_options', [15,25,50,100]) as $opt)
                                     <option value="{{ $opt }}" {{ $perPage == $opt ? 'selected' : '' }}>{{ $opt }} / page</option>
                                 @endforeach
                             </select>

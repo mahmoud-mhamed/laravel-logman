@@ -45,7 +45,7 @@ class LogmanServiceProvider extends ServiceProvider
 
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'logman');
 
-        if (config('logman.log_viewer.enabled', true)) {
+        if (config('logman.viewer.enabled', true)) {
             $this->registerRoutes();
         }
 
@@ -74,11 +74,9 @@ class LogmanServiceProvider extends ServiceProvider
 
     protected function registerRoutes(): void
     {
-        $middleware = config('logman.log_viewer.middleware', ['web']);
+        $middleware = config('logman.viewer.middleware', ['web']);
 
-        if (config('logman.log_viewer.authorize') !== null || !app()->isLocal()) {
-            $middleware[] = AuthorizeLogman::class;
-        }
+        $middleware[] = AuthorizeLogman::class;
 
         $this->app['router']->middlewareGroup('logman', $middleware);
 

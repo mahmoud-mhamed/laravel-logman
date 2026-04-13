@@ -112,7 +112,7 @@ class LogmanInstallCommand extends Command
         $this->line('  <fg=gray>Next steps:</>');
         $this->line('  <fg=gray>1.</> Fill in your channel credentials in <fg=yellow>.env</>');
         $this->line('  <fg=gray>2.</> Enable channels in <fg=yellow>config/logman.php</>');
-        $this->line('  <fg=gray>3.</> Visit <fg=yellow>/' . config('logman.log_viewer.route_prefix', 'logman') . '</> to open the log viewer');
+        $this->line('  <fg=gray>3.</> Visit <fg=yellow>/' . config('logman.viewer.route_prefix', 'logman') . '</> to open the log viewer');
         $this->line('  <fg=gray>4.</> Run <fg=yellow>php artisan logman:test</> to send a test notification');
         $this->info('');
     }

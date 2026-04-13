@@ -38,10 +38,10 @@ class LogManController extends Controller
         $sortDirection = $request->get('sort', 'desc');
         $reviewFilter = $request->get('review') ?: null;
         $reviewStatus = $request->get('review_status') ?: null;
-        $perPage = (int) $request->get('per_page', config('logman.log_viewer.per_page', 25));
-        $allowedOptions = config('logman.log_viewer.per_page_options', [15, 25, 50, 100]);
+        $perPage = (int) $request->get('per_page', config('logman.viewer.per_page', 25));
+        $allowedOptions = config('logman.viewer.per_page_options', [15, 25, 50, 100]);
         if (!in_array($perPage, $allowedOptions)) {
-            $perPage = config('logman.log_viewer.per_page', 25);
+            $perPage = config('logman.viewer.per_page', 25);
         }
         $page = (int) $request->get('page', 1);
 
@@ -100,8 +100,11 @@ class LogManController extends Controller
 
     public function download(Request $request)
     {
-        $file = $request->get('file');
-        $path = $this->viewer->downloadPath($file);
+        $validated = $request->validate([
+            'file' => 'required|string|max:255',
+        ]);
+
+        $path = $this->viewer->downloadPath($validated['file']);
 
         if (!$path) {
             return back()->with('error', 'File not found.');
@@ -112,23 +115,34 @@ class LogManController extends Controller
 
     public function delete(Request $request)
     {
-        $file = $request->get('file');
-        $this->viewer->deleteFile($file);
+        $validated = $request->validate([
+            'file' => 'required|string|max:255',
+        ]);
 
-        return redirect()->route('logman.index')->with('success', "Deleted: {$file}");
+        $this->viewer->deleteFile($validated['file']);
+
+        return redirect()->route('logman.index')->with('success', "Deleted: {$validated['file']}");
     }
 
     public function deleteMultiple(Request $request)
     {
-        $files = $request->get('files', []);
-        $count = $this->viewer->deleteMultiple($files);
+        $validated = $request->validate([
+            'files' => 'required|array',
+            'files.*' => 'string|max:255',
+        ]);
+
+        $count = $this->viewer->deleteMultiple($validated['files']);
 
         return redirect()->route('logman.index')->with('success', "Deleted {$count} file(s).");
     }
 
     public function clear(Request $request)
     {
-        $file = $request->get('file');
+        $validated = $request->validate([
+            'file' => 'required|string|max:255',
+        ]);
+
+        $file = $validated['file'];
         $this->viewer->clearFile($file);
 
         return redirect()->route('logman.index', ['file' => $file])->with('success', "Cleared: {$file}");
@@ -136,7 +150,11 @@ class LogManController extends Controller
 
     public function clearCache(Request $request)
     {
-        $file = $request->get('file');
+        $validated = $request->validate([
+            'file' => 'nullable|string|max:255',
+        ]);
+
+        $file = $validated['file'] ?? null;
 
         if ($file) {
             $this->viewer->clearFileCache($file);
@@ -151,30 +169,29 @@ class LogManController extends Controller
 
     public function review(Request $request)
     {
-        $file = $request->get('file');
-        $hash = $request->get('hash');
-        $status = $request->get('status', 'reviewed');
-        $note = $request->get('note', '');
+        $validated = $request->validate([
+            'file' => 'required|string|max:255',
+            'hash' => 'required|string|max:64',
+            'status' => 'nullable|string|in:reviewed,investigating,resolved,wont_fix',
+            'note' => 'nullable|string|max:1000',
+        ]);
 
-        if (!$file || !$hash) {
-            return back()->with('error', 'Missing parameters.');
-        }
+        $status = $validated['status'] ?? 'reviewed';
+        $note = $validated['note'] ?? '';
 
-        $this->viewer->addReview($file, $hash, $status, $note ?? '');
+        $this->viewer->addReview($validated['file'], $validated['hash'], $status, $note);
 
         return back()->with('success', 'Entry marked as ' . $status . '.');
     }
 
     public function unreview(Request $request)
     {
-        $file = $request->get('file');
-        $hash = $request->get('hash');
+        $validated = $request->validate([
+            'file' => 'required|string|max:255',
+            'hash' => 'required|string|max:64',
+        ]);
 
-        if (!$file || !$hash) {
-            return back()->with('error', 'Missing parameters.');
-        }
-
-        $this->viewer->removeReview($file, $hash);
+        $this->viewer->removeReview($validated['file'], $validated['hash']);
 
         return back()->with('success', 'Review removed.');
     }
@@ -192,45 +209,44 @@ class LogManController extends Controller
 
     public function mute(Request $request, MuteService $muteService)
     {
-        $exceptionClass = $request->get('exception_class');
-        $messagePattern = $request->get('message_pattern');
-        $duration = $request->get('duration', '1h');
-        $reason = $request->get('reason');
+        $validated = $request->validate([
+            'exception_class' => 'required|string|max:255',
+            'message_pattern' => 'nullable|string|max:500',
+            'duration' => 'required|string|in:1h,6h,12h,1d,3d,1w,1m',
+            'reason' => 'nullable|string|max:500',
+        ]);
 
-        if (!$exceptionClass) {
-            return back()->with('error', 'Exception class is required.');
-        }
+        $muteService->mute(
+            $validated['exception_class'],
+            $validated['message_pattern'] ?? null,
+            $validated['duration'],
+            $validated['reason'] ?? null,
+        );
 
-        $muteService->mute($exceptionClass, $messagePattern, $duration, $reason);
-
-        return back()->with('success', "Muted: {$exceptionClass} for {$duration}.");
+        return back()->with('success', "Muted: {$validated['exception_class']} for {$validated['duration']}.");
     }
 
     public function unmute(Request $request, MuteService $muteService)
     {
-        $id = $request->get('id');
+        $validated = $request->validate([
+            'id' => 'required|string|max:64',
+        ]);
 
-        if (!$id) {
-            return back()->with('error', 'Mute ID is required.');
-        }
-
-        $muteService->unmute($id);
+        $muteService->unmute($validated['id']);
 
         return back()->with('success', 'Unmuted successfully.');
     }
 
     public function extendMute(Request $request, MuteService $muteService)
     {
-        $id = $request->get('id');
-        $duration = $request->get('duration', '1h');
+        $validated = $request->validate([
+            'id' => 'required|string|max:64',
+            'duration' => 'required|string|in:1h,6h,12h,1d,3d,1w,1m',
+        ]);
 
-        if (!$id) {
-            return back()->with('error', 'Mute ID is required.');
-        }
+        $muteService->extendMute($validated['id'], $validated['duration']);
 
-        $muteService->extendMute($id, $duration);
-
-        return back()->with('success', "Mute extended for {$duration}.");
+        return back()->with('success', "Mute extended for {$validated['duration']}.");
     }
 
     public function unmuteAll(MuteService $muteService)
@@ -245,10 +261,13 @@ class LogManController extends Controller
 
     public function unmuteMultiple(Request $request, MuteService $muteService)
     {
-        $ids = $request->get('ids', []);
-        $count = 0;
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'string|max:64',
+        ]);
 
-        foreach ($ids as $id) {
+        $count = 0;
+        foreach ($validated['ids'] as $id) {
             if ($muteService->unmute($id)) {
                 $count++;
             }
@@ -268,29 +287,32 @@ class LogManController extends Controller
 
     public function throttle(Request $request, MuteService $muteService)
     {
-        $exceptionClass = $request->get('exception_class');
-        $messagePattern = $request->get('message_pattern');
-        $maxHits = (int) $request->get('max_hits', 1);
-        $period = $request->get('period', '1d');
-        $reason = $request->get('reason');
+        $validated = $request->validate([
+            'exception_class' => 'required|string|max:255',
+            'message_pattern' => 'nullable|string|max:500',
+            'max_hits' => 'required|integer|min:1|max:10000',
+            'period' => 'required|string|in:1h,6h,12h,1d,3d,1w,10d,1m',
+            'reason' => 'nullable|string|max:500',
+        ]);
 
-        if (!$exceptionClass) {
-            return back()->with('error', 'Exception class is required.');
-        }
+        $muteService->addThrottle(
+            $validated['exception_class'],
+            $validated['message_pattern'] ?? null,
+            $validated['max_hits'],
+            $validated['period'],
+            $validated['reason'] ?? null,
+        );
 
-        $muteService->addThrottle($exceptionClass, $messagePattern, $maxHits, $period, $reason);
-
-        return back()->with('success', "Throttle set: max {$maxHits} per {$period}.");
+        return back()->with('success', "Throttle set: max {$validated['max_hits']} per {$validated['period']}.");
     }
 
     public function unthrottle(Request $request, MuteService $muteService)
     {
-        $id = $request->get('id');
-        if (!$id) {
-            return back()->with('error', 'Throttle ID is required.');
-        }
+        $validated = $request->validate([
+            'id' => 'required|string|max:64',
+        ]);
 
-        $muteService->removeThrottle($id);
+        $muteService->removeThrottle($validated['id']);
         return back()->with('success', 'Throttle removed.');
     }
 
@@ -305,9 +327,13 @@ class LogManController extends Controller
 
     public function unthrottleMultiple(Request $request, MuteService $muteService)
     {
-        $ids = $request->get('ids', []);
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'string|max:64',
+        ]);
+
         $count = 0;
-        foreach ($ids as $id) {
+        foreach ($validated['ids'] as $id) {
             if ($muteService->removeThrottle($id)) {
                 $count++;
             }
@@ -348,7 +374,7 @@ class LogManController extends Controller
                 ['key' => 'channels.telegram.retries', 'label' => 'Retries', 'value' => $channels['telegram']['retries'] ?? 2, 'type' => 'number', 'description' => 'Retry attempts on failure'],
                 ['key' => 'channels.telegram.throttle', 'label' => 'Throttle (s)', 'value' => $channels['telegram']['throttle'] ?? 0, 'type' => 'number', 'description' => 'Per-channel cooldown in seconds'],
                 ['key' => 'channels.telegram.bot_token', 'label' => 'Bot Token', 'value' => !empty($channels['telegram']['bot_token']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Telegram bot token'],
-                ['key' => 'channels.telegram.chat_id', 'label' => 'Chat ID', 'value' => !empty($channels['telegram']['chat_id']) ? $channels['telegram']['chat_id'] : 'NOT SET', 'type' => !empty($channels['telegram']['chat_id']) ? 'string' : 'status', 'description' => 'Telegram chat/group ID'],
+                ['key' => 'channels.telegram.chat_id', 'label' => 'Chat ID', 'value' => !empty($channels['telegram']['chat_id']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Telegram chat/group ID'],
             ],
             'Channel: Discord' => [
                 ['key' => 'channels.discord.enabled', 'label' => 'Enabled', 'value' => $channels['discord']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Enable Discord notifications'],
@@ -384,14 +410,14 @@ class LogManController extends Controller
                 ['key' => 'storage_path', 'label' => 'Package Storage', 'value' => $config['storage_path'] ?? '-', 'type' => 'path', 'description' => 'Directory for mutes.json, rate_limits.json, etc.'],
             ],
             'Log Viewer' => [
-                ['key' => 'log_viewer.enabled', 'label' => 'Enabled', 'value' => $config['log_viewer']['enabled'] ?? true, 'type' => 'bool', 'description' => 'Enable or disable log viewer routes'],
-                ['key' => 'log_viewer.route_prefix', 'label' => 'Route Prefix', 'value' => $config['log_viewer']['route_prefix'] ?? 'logman', 'type' => 'string', 'description' => 'URL prefix for the log viewer'],
-                ['key' => 'log_viewer.middleware', 'label' => 'Middleware', 'value' => $config['log_viewer']['middleware'] ?? [], 'type' => 'list', 'description' => 'Middleware applied to log viewer routes'],
-                ['key' => 'log_viewer.authorize', 'label' => 'Authorize', 'value' => $config['log_viewer']['authorize'] !== null ? 'Custom callback' : 'None (open)', 'type' => $config['log_viewer']['authorize'] !== null ? 'string' : 'status', 'description' => 'Authorization callback for access control'],
-                ['key' => 'log_viewer.storage_path', 'label' => 'Logs Path', 'value' => $config['log_viewer']['storage_path'] ?? '-', 'type' => 'path', 'description' => 'Path to Laravel log files directory'],
-                ['key' => 'log_viewer.pattern', 'label' => 'File Pattern', 'value' => $config['log_viewer']['pattern'] ?? '*.log', 'type' => 'string', 'description' => 'Glob pattern for matching log files'],
-                ['key' => 'log_viewer.max_file_size', 'label' => 'Max File Size', 'value' => $this->formatFileSize($config['log_viewer']['max_file_size'] ?? 52428800), 'type' => 'string', 'description' => 'Maximum log file size to display in browser'],
-                ['key' => 'log_viewer.per_page', 'label' => 'Per Page', 'value' => $config['log_viewer']['per_page'] ?? 25, 'type' => 'number', 'description' => 'Default entries per page'],
+                ['key' => 'viewer.enabled', 'label' => 'Enabled', 'value' => $config['viewer']['enabled'] ?? true, 'type' => 'bool', 'description' => 'Enable or disable log viewer routes'],
+                ['key' => 'viewer.route_prefix', 'label' => 'Route Prefix', 'value' => $config['viewer']['route_prefix'] ?? 'logman', 'type' => 'string', 'description' => 'URL prefix for the log viewer'],
+                ['key' => 'viewer.middleware', 'label' => 'Middleware', 'value' => $config['viewer']['middleware'] ?? [], 'type' => 'list', 'description' => 'Middleware applied to log viewer routes'],
+                ['key' => 'viewer.authorize', 'label' => 'Authorize', 'value' => $config['viewer']['authorize'] !== null ? 'Custom callback' : 'None (open)', 'type' => $config['viewer']['authorize'] !== null ? 'string' : 'status', 'description' => 'Authorization callback for access control'],
+                ['key' => 'viewer.storage_path', 'label' => 'Logs Path', 'value' => $config['viewer']['storage_path'] ?? '-', 'type' => 'path', 'description' => 'Path to Laravel log files directory'],
+                ['key' => 'viewer.pattern', 'label' => 'File Pattern', 'value' => $config['viewer']['pattern'] ?? '*.log', 'type' => 'string', 'description' => 'Glob pattern for matching log files'],
+                ['key' => 'viewer.max_file_size', 'label' => 'Max File Size', 'value' => $this->formatFileSize($config['viewer']['max_file_size'] ?? 52428800), 'type' => 'string', 'description' => 'Maximum log file size to display in browser'],
+                ['key' => 'viewer.per_page', 'label' => 'Per Page', 'value' => $config['viewer']['per_page'] ?? 25, 'type' => 'number', 'description' => 'Default entries per page'],
             ],
             'Environment' => [
                 ['key' => 'app.env', 'label' => 'App Environment', 'value' => app()->environment(), 'type' => 'string', 'description' => 'Current application environment'],
@@ -410,13 +436,15 @@ class LogManController extends Controller
 
     public function sendToChannel(Request $request)
     {
-        $file = $request->get('file');
-        $hash = $request->get('hash');
-        $channelName = $request->get('channel');
+        $validated = $request->validate([
+            'file' => 'required|string|max:255',
+            'hash' => 'required|string|max:64',
+            'channel' => 'required|string|max:50|alpha_dash',
+        ]);
 
-        if (!$file || !$hash || !$channelName) {
-            return back()->with('error', 'Missing parameters.');
-        }
+        $file = $validated['file'];
+        $hash = $validated['hash'];
+        $channelName = $validated['channel'];
 
         $channelConfig = config("logman.channels.{$channelName}");
         if (!$channelConfig || empty($channelConfig['enabled'])) {
@@ -468,23 +496,21 @@ class LogManController extends Controller
             'mail' => \Mhamed\Logman\Channels\MailChannel::class,
         ];
 
-        $driverClass = $channelConfig['driver'] ?? ($drivers[$channelName] ?? null);
+        // Only allow known built-in drivers — ignore custom 'driver' from config to prevent arbitrary class instantiation
+        $driverClass = $drivers[$channelName] ?? null;
 
-        if (!$driverClass || !class_exists($driverClass)) {
+        if (!$driverClass) {
             return back()->with('error', "Driver not found for channel '{$channelName}'.");
         }
 
         $driver = new $driverClass();
 
-        if (!$driver instanceof ChannelInterface) {
-            return back()->with('error', "Invalid driver for channel '{$channelName}'.");
-        }
-
         try {
             $driver->sendException($payload);
             return back()->with('success', "Sent to " . ucfirst($channelName) . " successfully.");
         } catch (\Throwable $e) {
-            return back()->with('error', "Failed to send to {$channelName}: " . $e->getMessage());
+            report($e);
+            return back()->with('error', "Failed to send to " . ucfirst($channelName) . ". Check logs for details.");
         }
     }
 
@@ -520,14 +546,17 @@ class LogManController extends Controller
 
     public function export(Request $request)
     {
-        $file = $request->get('file');
-        $format = $request->get('format', 'json');
-        $level = $request->get('level');
-        $search = $request->get('search');
+        $validated = $request->validate([
+            'file' => 'required|string|max:255',
+            'format' => 'nullable|string|in:json,csv',
+            'level' => 'nullable|string|max:50',
+            'search' => 'nullable|string|max:500',
+        ]);
 
-        if (!$file) {
-            return back()->with('error', 'No file specified.');
-        }
+        $file = $validated['file'];
+        $format = $validated['format'] ?? 'json';
+        $level = $validated['level'] ?? null;
+        $search = $validated['search'] ?? null;
 
         $result = $this->viewer->getLogEntries(
             $file,
@@ -547,16 +576,18 @@ class LogManController extends Controller
             'stack' => $e['stack'],
         ])->all();
 
+        $safeFilename = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($file));
+
         if ($format === 'csv') {
             $csv = $this->buildCsv($entries);
             return response($csv, 200, [
                 'Content-Type' => 'text/csv',
-                'Content-Disposition' => 'attachment; filename="logman-export-' . $file . '.csv"',
+                'Content-Disposition' => 'attachment; filename="logman-export-' . $safeFilename . '.csv"',
             ]);
         }
 
         return response()->json($entries, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
-            ->header('Content-Disposition', 'attachment; filename="logman-export-' . $file . '.json"');
+            ->header('Content-Disposition', 'attachment; filename="logman-export-' . $safeFilename . '.json"');
     }
 
     protected function buildCsv(array $entries): string
@@ -596,13 +627,15 @@ class LogManController extends Controller
 
     public function bookmark(Request $request)
     {
-        $file = $request->get('file');
-        $hash = $request->get('hash');
-        $note = $request->get('note', '');
+        $validated = $request->validate([
+            'file' => 'required|string|max:255',
+            'hash' => 'required|string|max:64',
+            'note' => 'nullable|string|max:1000',
+        ]);
 
-        if (!$file || !$hash) {
-            return back()->with('error', 'Missing parameters.');
-        }
+        $file = $validated['file'];
+        $hash = $validated['hash'];
+        $note = $validated['note'] ?? '';
 
         $entry = $this->viewer->findEntryByHash($file, $hash);
         if (!$entry) {
@@ -616,14 +649,19 @@ class LogManController extends Controller
 
     public function unbookmark(Request $request)
     {
-        $id = $request->get('id');
-        if (!$id) {
-            return back()->with('error', 'Missing bookmark ID.');
-        }
+        $validated = $request->validate([
+            'id' => 'required|string|max:64',
+        ]);
 
-        $this->viewer->removeBookmark($id);
+        $this->viewer->removeBookmark($validated['id']);
 
         return back()->with('success', 'Bookmark removed.');
+    }
+
+    public function clearBookmarks()
+    {
+        $this->viewer->clearAllBookmarks();
+        return redirect()->route('logman.bookmarks')->with('success', 'All bookmarks cleared.');
     }
 
     // ─── About ─────────────────────────────────────────────

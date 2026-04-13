@@ -10,7 +10,7 @@ class AuthorizeLogman
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $authorize = config('logman.log_viewer.authorize');
+        $authorize = config('logman.viewer.authorize');
 
         if ($authorize === null) {
             // No callback configured — block access outside local env

@@ -156,13 +156,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Hidden Fields
+    |--------------------------------------------------------------------------
+    |
+    | These field names will be masked with '********' in notification payloads
+    | (request body, query params, DB bindings) to prevent leaking secrets.
+    |
+    */
+    'hidden_fields' => [
+        'password', 'password_confirmation', 'token', 'secret',
+        'credit_card', 'card_number', 'cvv', 'ssn',
+        'authorization', 'api_key', 'api_secret', 'access_token',
+        'refresh_token', 'private_key',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Log Viewer
     |--------------------------------------------------------------------------
     */
-    'log_viewer' => [
+    'viewer' => [
 
         // Enable or disable the log viewer routes
-        'enabled' => env('LOG_VIEWER_ENABLED', true),
+        'enabled' => env('LOGMAN_VIEWER_ENABLED', true),
 
         // URL prefix (e.g. /logman)
         'route_prefix' => 'logman',

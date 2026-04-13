@@ -1,5 +1,5 @@
 {
-    "name": "mhamed/laravel-logman",
+    "name": "mahmoud-mhamed/laravel-logman",
     "description": "Automatic error reporting and log management for Laravel applications",
     "keywords": ["laravel", "logging", "errors", "exceptions", "monitoring"],
     "license": "MIT",

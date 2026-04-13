@@ -355,8 +355,8 @@ class LogmanService
                 'X-Requested-With' => (string) $request->header('X-Requested-With'),
                 'X-Forwarded-For' => (string) $request->header('X-Forwarded-For'),
             ],
-            'query' => $request->query() ?? [],
-            'body' => $request->request?->all() ?? $request->all(),
+            'query' => $this->sanitize($request->query() ?? []),
+            'body' => $this->sanitize($request->request?->all() ?? $request->all()),
             'files' => $files,
         ];
     }
@@ -425,6 +425,25 @@ class LogmanService
         } catch (Throwable $e) {
             return [];
         }
+    }
+
+    protected function sanitize(array $data): array
+    {
+        $hidden = config('logman.hidden_fields', [
+            'password', 'password_confirmation', 'token', 'secret',
+            'credit_card', 'card_number', 'cvv', 'ssn',
+            'authorization', 'api_key', 'api_secret',
+        ]);
+
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = $this->sanitize($value);
+            } elseif (is_string($key) && in_array(strtolower($key), $hidden)) {
+                $data[$key] = '********';
+            }
+        }
+
+        return $data;
     }
 
     protected function collectEnvironment(): array

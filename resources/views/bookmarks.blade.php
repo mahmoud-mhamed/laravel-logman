@@ -30,7 +30,15 @@
     <div class="bookmarks-page">
         <div class="bookmarks-header">
             <h2>Bookmarks</h2>
-            <span class="bookmarks-count">{{ count($bookmarks) }} saved</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <span class="bookmarks-count">{{ count($bookmarks) }} saved</span>
+                @if(count($bookmarks) > 0)
+                    <form method="POST" action="{{ route('logman.clear-bookmarks') }}" style="display:inline;" onsubmit="return confirm('Remove all bookmarks?')">
+                        @csrf
+                        <button type="submit" class="btn btn-sm btn-danger">Clear All</button>
+                    </form>
+                @endif
+            </div>
         </div>
 
         @if(session('success'))

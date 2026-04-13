@@ -282,7 +282,11 @@ class MuteService
         $message = $throwable->getMessage();
 
         foreach ($mutes as &$mute) {
-            $classMatch = $this->classMatches($class, $mute['exception_class']);
+            $classMatch = $this->classMatches($class, $mute['exception_class'])
+                || $mute['exception_class'] === $message
+                || str_contains($message, $mute['exception_class'])
+                || str_contains($mute['exception_class'], $message)
+                || str_contains($mute['exception_class'], $class);
             $patternMatch = empty($mute['message_pattern'])
                 || str_contains($message, $mute['message_pattern']);
 
@@ -380,7 +384,11 @@ class MuteService
         $now = now();
 
         foreach ($throttles as &$throttle) {
-            $classMatch = $this->classMatches($class, $throttle['exception_class']);
+            $classMatch = $this->classMatches($class, $throttle['exception_class'])
+                || $throttle['exception_class'] === $message
+                || str_contains($message, $throttle['exception_class'])
+                || str_contains($throttle['exception_class'], $message)
+                || str_contains($throttle['exception_class'], $class);
             $patternMatch = empty($throttle['message_pattern'])
                 || str_contains($message, $throttle['message_pattern']);
 
@@ -493,6 +501,13 @@ class MuteService
         // Clean old entries (older than 1 hour)
         $cutoff = time() - 3600;
         $cleaned = array_filter($limits, fn($l) => ($l['last_sent'] ?? 0) > $cutoff);
+
+        // Cap at 1000 entries to prevent unbounded growth
+        $maxEntries = 1000;
+        if (count($cleaned) > $maxEntries) {
+            uasort($cleaned, fn($a, $b) => ($b['last_sent'] ?? 0) - ($a['last_sent'] ?? 0));
+            $cleaned = array_slice($cleaned, 0, $maxEntries, true);
+        }
 
         if (count($cleaned) !== count($limits)) {
             $this->cachedRateLimits = $cleaned;

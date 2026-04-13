@@ -25,8 +25,19 @@ class SendNotificationJob implements ShouldQueue
         $this->tries = max(1, $retries + 1);
     }
 
+    protected static array $allowedDrivers = [
+        \Mhamed\Logman\Channels\SlackChannel::class,
+        \Mhamed\Logman\Channels\TelegramChannel::class,
+        \Mhamed\Logman\Channels\DiscordChannel::class,
+        \Mhamed\Logman\Channels\MailChannel::class,
+    ];
+
     public function handle(): void
     {
+        if (!in_array($this->driverClass, static::$allowedDrivers, true)) {
+            return;
+        }
+
         $driver = new $this->driverClass();
 
         if (!$driver instanceof ChannelInterface) {

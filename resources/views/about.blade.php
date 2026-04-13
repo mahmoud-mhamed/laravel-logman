@@ -148,7 +148,7 @@
                 </div>
                 <div class="env-row">
                     <span class="env-label">Log Viewer</span>
-                    <span class="env-value" style="color:{{ $config['log_viewer']['enabled'] ?? true ? 'var(--debug-text)' : 'var(--danger-text)' }}">{{ ($config['log_viewer']['enabled'] ?? true) ? '/' . ($config['log_viewer']['route_prefix'] ?? 'logman') : 'Disabled' }}</span>
+                    <span class="env-value" style="color:{{ $config['viewer']['enabled'] ?? true ? 'var(--debug-text)' : 'var(--danger-text)' }}">{{ ($config['viewer']['enabled'] ?? true) ? '/' . ($config['viewer']['route_prefix'] ?? 'logman') : 'Disabled' }}</span>
                 </div>
             </div>
 
