@@ -66,7 +66,7 @@ class LogmanInstallCommand extends Command
         $variables = [
             '',
             '# Logman — Notification Channels',
-            '# Docs: https://github.com/mhamed/laravel-logman',
+            '# Docs: https://github.com/mahmoud-mhamed/laravel-logman',
             'LOG_SLACK_WEBHOOK_URL=',
             'LOGMAN_TELEGRAM_BOT_TOKEN=',
             'LOGMAN_TELEGRAM_CHAT_ID=',

@@ -64,7 +64,7 @@ On top of that, Logman ships with a **full-featured log viewer** you can access 
 ## Installation
 
 ```bash
-composer require mhamed/laravel-logman
+composer require mahmoud-mhamed/laravel-logman
 ```
 
 Laravel auto-discovers the package. Then run the install command:
