@@ -188,10 +188,10 @@ return [
         'middleware' => ['web'],
 
         // Authorization callback — return true to allow access, false to deny.
-        // Set to null to allow all authenticated users (when using 'auth' middleware).
+        // Set to null to allow access only in local environment.
+        // To allow all access, use: fn () => true
         // Example: fn ($request) => $request->user()?->isAdmin()
-        // Example: fn () => true
-        'authorize' => null,
+        'authorize' => fn() => true,
 
         // Path to the log files directory
         'storage_path' => storage_path('logs'),
