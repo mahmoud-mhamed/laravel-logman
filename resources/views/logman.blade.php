@@ -202,21 +202,21 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h3>Files ({{ $files->count() }})</h3>
-                <div style="display:flex;gap:4px;align-items:center;">
-                    <button class="btn btn-sm btn-danger" onclick="openClearAllModal()" title="Clear all files, mutes, throttles & bookmarks">
-                        Clear All
-                    </button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteSelected()" title="Delete selected" id="deleteSelectedBtn" style="display:none;">
-                        Delete Selected
-                    </button>
-                </div>
+                <button class="btn btn-sm btn-danger" onclick="openClearAllModal()" title="Clear all: files, mutes, throttles & bookmarks">
+                    Clear All
+                </button>
             </div>
             <div class="sidebar-tools">
                 <input type="text" class="sidebar-search" placeholder="Filter files..." oninput="filterFiles(this.value)">
-                <label class="select-all-wrap">
-                    <input type="checkbox" onchange="toggleSelectAll(this.checked)">
-                    All
-                </label>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <label class="select-all-wrap">
+                        <input type="checkbox" onchange="toggleSelectAll(this.checked)">
+                        All
+                    </label>
+                    <button class="btn btn-sm btn-danger" onclick="deleteSelected()" title="Delete selected" id="deleteSelectedBtn" style="display:none;padding:2px 6px;font-size:11px;">
+                        Delete
+                    </button>
+                </div>
             </div>
             <div class="file-list">
                 @forelse($files as $file)
