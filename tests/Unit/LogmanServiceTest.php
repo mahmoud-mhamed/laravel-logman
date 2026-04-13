@@ -41,6 +41,9 @@ class LogmanServiceTest extends TestCase
         $service = app(LogmanService::class);
         $service->logException(new \RuntimeException('Test'));
 
+        // afterResponse() closures don't fire during tests — flush them manually
+        app()->terminate();
+
         $this->assertTrue(FakeChannel::$sent);
 
         FakeChannel::$sent = false;
