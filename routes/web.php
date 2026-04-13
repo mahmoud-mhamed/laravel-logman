@@ -37,6 +37,17 @@ Route::group([
     // Send to channel
     Route::post('/send-to-channel', [LogManController::class, 'sendToChannel'])->name('logman.send-to-channel');
 
+    // Grouped errors
+    Route::get('/grouped', [LogManController::class, 'grouped'])->name('logman.grouped');
+
+    // Export
+    Route::get('/export', [LogManController::class, 'export'])->name('logman.export');
+
+    // Bookmarks
+    Route::post('/bookmark', [LogManController::class, 'bookmark'])->name('logman.bookmark');
+    Route::post('/unbookmark', [LogManController::class, 'unbookmark'])->name('logman.unbookmark');
+    Route::get('/bookmarks', [LogManController::class, 'bookmarks'])->name('logman.bookmarks');
+
     // Config & About
     Route::get('/config', [LogManController::class, 'config'])->name('logman.config');
     Route::get('/about', [LogManController::class, 'about'])->name('logman.about');

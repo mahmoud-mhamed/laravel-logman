@@ -4,11 +4,13 @@ namespace Mhamed\Logman;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Mhamed\Logman\Channels\ChannelInterface;
 use Mhamed\Logman\Channels\DiscordChannel;
 use Mhamed\Logman\Channels\MailChannel;
 use Mhamed\Logman\Channels\SlackChannel;
 use Mhamed\Logman\Channels\TelegramChannel;
+use Mhamed\Logman\Jobs\SendNotificationJob;
 use Mhamed\Logman\Services\MuteService;
 use Throwable;
 
@@ -19,6 +21,11 @@ class LogmanService
         'telegram' => TelegramChannel::class,
         'discord' => DiscordChannel::class,
         'mail' => MailChannel::class,
+    ];
+
+    protected static array $levelPriority = [
+        'debug' => 0, 'info' => 1, 'notice' => 2, 'warning' => 3,
+        'error' => 4, 'critical' => 5, 'alert' => 6, 'emergency' => 7,
     ];
 
     public function logException(Throwable $throwable): void
@@ -35,9 +42,18 @@ class LogmanService
             }
 
             $payload = $this->buildPayload($throwable);
+            $resolvedChannels = $this->resolveChannels(exceptionsOnly: true, level: 'error');
+            $throttleKey = md5(get_class($throwable) . '|' . $throwable->getFile() . '|' . $throwable->getLine());
 
-            foreach ($this->getEnabledChannels(exceptionsOnly: true) as $channel) {
-                $channel->sendException($payload);
+            if (empty($resolvedChannels)) {
+                return;
+            }
+
+            foreach ($resolvedChannels as $ch) {
+                if ($this->isChannelThrottled($ch['name'], $throttleKey, $ch['settings']['throttle'] ?? 0)) {
+                    continue;
+                }
+                $this->dispatchToChannel($ch, 'exception', $payload);
             }
         } catch (Throwable $e) {
             // Silently fail to prevent infinite error loops
@@ -54,8 +70,10 @@ class LogmanService
                 'previous_url' => (string) (request()->header('referer') ?: request()->header('referrer') ?: '-'),
             ];
 
-            foreach ($this->getEnabledChannels() as $channel) {
-                $channel->sendInfo($message, $context);
+            $resolvedChannels = $this->resolveChannels(level: 'info');
+
+            foreach ($resolvedChannels as $ch) {
+                $this->dispatchToChannel($ch, 'info', ['message' => $message, 'context' => $context]);
             }
         } catch (Throwable $e) {
             // Silently fail
@@ -80,13 +98,18 @@ class LogmanService
 
     // ─── Channel Resolution ────────────────────────────────────
 
+    protected static array $channelInstances = [];
+
     /**
-     * @return ChannelInterface[]
+     * Resolve enabled channels with their settings.
+     *
+     * @return array<array{name: string, settings: array, driver_class: string, instance: ChannelInterface}>
      */
-    protected function getEnabledChannels(bool $exceptionsOnly = false): array
+    protected function resolveChannels(bool $exceptionsOnly = false, string $level = 'debug'): array
     {
         $channels = [];
         $configured = config('logman.channels', []);
+        $levelNum = static::$levelPriority[$level] ?? 0;
 
         foreach ($configured as $name => $settings) {
             if (empty($settings['enabled'])) {
@@ -97,17 +120,101 @@ class LogmanService
                 continue;
             }
 
+            // Min level filter
+            $minLevel = $settings['min_level'] ?? 'debug';
+            $minLevelNum = static::$levelPriority[$minLevel] ?? 0;
+            if ($levelNum < $minLevelNum) {
+                continue;
+            }
+
             $driverClass = $settings['driver'] ?? (static::$drivers[$name] ?? null);
 
-            if (is_string($driverClass) && class_exists($driverClass)) {
-                $instance = new $driverClass();
-                if ($instance instanceof ChannelInterface) {
-                    $channels[] = $instance;
-                }
+            if (!is_string($driverClass) || !class_exists($driverClass)) {
+                continue;
             }
+
+            if (!isset(static::$channelInstances[$driverClass])) {
+                $instance = new $driverClass();
+                if (!$instance instanceof ChannelInterface) {
+                    continue;
+                }
+                static::$channelInstances[$driverClass] = $instance;
+            }
+
+            $channels[] = [
+                'name' => $name,
+                'settings' => $settings,
+                'driver_class' => $driverClass,
+                'instance' => static::$channelInstances[$driverClass],
+            ];
         }
 
         return $channels;
+    }
+
+    /**
+     * For backward compatibility — returns flat array of ChannelInterface instances.
+     *
+     * @return ChannelInterface[]
+     */
+    protected function getEnabledChannels(bool $exceptionsOnly = false): array
+    {
+        return array_column($this->resolveChannels($exceptionsOnly), 'instance');
+    }
+
+    // ─── Dispatch ──────────────────────────────────────────────
+
+    protected function dispatchToChannel(array $ch, string $type, array $data): void
+    {
+        $settings = $ch['settings'];
+        $useQueue = !empty($settings['queue']);
+        $retries = (int) ($settings['retries'] ?? 0);
+
+        if ($useQueue) {
+            SendNotificationJob::dispatch($ch['driver_class'], $type, $data, $retries);
+        } else {
+            // Non-blocking: send after the response is delivered to the user
+            $instance = $ch['instance'];
+            dispatch(function () use ($instance, $type, $data, $retries) {
+                $this->sendWithRetry($instance, $type, $data, $retries);
+            })->afterResponse();
+        }
+    }
+
+    protected function sendWithRetry(ChannelInterface $channel, string $type, array $data, int $retries): void
+    {
+        $attempts = max(1, $retries + 1);
+
+        for ($i = 0; $i < $attempts; $i++) {
+            try {
+                if ($type === 'exception') {
+                    $channel->sendException($data);
+                } elseif ($type === 'info') {
+                    $channel->sendInfo($data['message'], $data['context']);
+                }
+                return; // Success
+            } catch (Throwable $e) {
+                if ($i === $attempts - 1) {
+                    // Last attempt failed — silently fail
+                    return;
+                }
+                usleep(500_000); // 500ms before retry
+            }
+        }
+    }
+
+    // ─── Per-Channel Throttle ──────────────────────────────────
+
+    protected function isChannelThrottled(string $channelName, string $exceptionKey, int $throttleSeconds): bool
+    {
+        if ($throttleSeconds <= 0) {
+            return false;
+        }
+
+        $cacheKey = "logman:throttle:{$channelName}:{$exceptionKey}";
+
+        // add() returns false if key already exists — single cache operation instead of has()+put()
+        return !Cache::add($cacheKey, true, $throttleSeconds);
     }
 
     // ─── Payload Builder ───────────────────────────────────────

@@ -104,6 +104,8 @@ class LogManService
         ?string $muteFilter = null,
         array   $activeMutes = [],
         array   $activeThrottles = [],
+        ?string $bookmarkFilter = null,
+        array   $bookmarkedHashes = [],
     ): array
     {
         $perPage = $perPage ?? $this->perPage;
@@ -118,6 +120,9 @@ class LogManService
         }
 
         $entries = $this->getCachedEntries($filename, $path);
+
+        // Apply review data from separate storage
+        $this->applyReviews($entries, $filename);
 
         // Detect if file has multiple dates
         $hasMultipleDates = $this->hasMultipleDates($entries);
@@ -185,17 +190,28 @@ class LogManService
             $entries = array_filter($entries, fn($e) => empty($e['is_muted']));
         }
 
-        $entries = array_values($entries);
-
-        // Sort
-        if ($sortDirection === 'asc') {
-            $entries = array_reverse($entries);
+        // Bookmark filter
+        if ($bookmarkFilter === 'bookmarked' && !empty($bookmarkedHashes)) {
+            $bmSet = array_flip($bookmarkedHashes);
+            $entries = array_filter($entries, fn($e) => isset($bmSet[$e['hash']]));
+        } elseif ($bookmarkFilter === 'not_bookmarked') {
+            $bmSet = array_flip($bookmarkedHashes);
+            $entries = array_filter($entries, fn($e) => !isset($bmSet[$e['hash']]));
         }
 
-        // Paginate
+        $entries = array_values($entries);
+
+        // Paginate — entries are stored oldest-first (chronological).
+        // For desc (newest first), slice from the end to avoid reversing the full array.
         $total = count($entries);
-        $offset = ($page - 1) * $perPage;
-        $items = array_slice($entries, $offset, $perPage);
+        if ($sortDirection === 'desc') {
+            $offset = max(0, $total - ($page * $perPage));
+            $length = min($perPage, $total - (($page - 1) * $perPage));
+            $items = array_reverse(array_slice($entries, $offset, $length));
+        } else {
+            $offset = ($page - 1) * $perPage;
+            $items = array_slice($entries, $offset, $perPage);
+        }
 
         $paginator = new LengthAwarePaginator($items, $total, $perPage, $page, [
             'path' => request()->url(),
@@ -230,8 +246,7 @@ class LogManService
         $cacheKey = $this->cachePrefix . md5($filename . $mtime);
 
         return Cache::remember($cacheKey, 300, function () use ($path) {
-            $content = File::get($path);
-            return $this->parseLogContent($content);
+            return $this->parseLogFile($path);
         });
     }
 
@@ -251,27 +266,25 @@ class LogManService
         }
     }
 
-    protected function parseLogContent(string $content): array
+    /**
+     * Stream-parse a log file line-by-line instead of loading the entire file into memory.
+     */
+    protected function parseLogFile(string $path): array
     {
         $pattern = '/\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}\.?\d*[\+\-]?\d{0,4})\]\s+(\w+)\.(\w+):\s*(.*)/';
-        $lines = explode("\n", $content);
         $entries = [];
         $currentEntry = null;
 
-        foreach ($lines as $line) {
-            // Parse #REVIEWED lines
+        $handle = fopen($path, 'r');
+        if (!$handle) {
+            return [];
+        }
+
+        while (($line = fgets($handle)) !== false) {
+            $line = rtrim($line, "\n\r");
+
+            // Skip legacy #REVIEWED lines embedded in log files (reviews now stored separately)
             if (str_starts_with($line, '#REVIEWED ')) {
-                if ($currentEntry !== null) {
-                    $json = substr($line, 10);
-                    $reviewData = json_decode($json, true);
-                    if (json_last_error() === JSON_ERROR_NONE) {
-                        $currentEntry['reviewed'] = true;
-                        $currentEntry['review_status'] = $reviewData['status'] ?? 'reviewed';
-                        $currentEntry['review_note'] = $reviewData['note'] ?? '';
-                        $currentEntry['review_by'] = $reviewData['by'] ?? '';
-                        $currentEntry['review_at'] = $reviewData['at'] ?? '';
-                    }
-                }
                 continue;
             }
 
@@ -300,13 +313,16 @@ class LogManService
             }
         }
 
+        fclose($handle);
+
         if ($currentEntry !== null) {
             $this->finalizeEntry($currentEntry);
             $entries[] = $currentEntry;
         }
 
-        // Newest first by default
-        return array_reverse($entries);
+        // Return in chronological order (oldest first).
+        // Sorting/reversing is handled at pagination time to avoid copying the full array.
+        return $entries;
     }
 
     protected function finalizeEntry(array &$entry): void
@@ -385,7 +401,14 @@ class LogManService
         $globalCounts = [];
         $perFileCounts = [];
         $totalEntries = 0;
+        $today = date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('yesterday'));
+        $todayCounts = [];
+        $todayTotal = 0;
+        $yesterdayCounts = [];
+        $yesterdayTotal = 0;
 
+        // Single loop: collect global stats + today/yesterday in one pass
         foreach ($files as $file) {
             $path = $this->safePath($file['name']);
             if (!$path || !File::exists($path) || File::size($path) > $this->maxFileSize) {
@@ -407,23 +430,8 @@ class LogManService
             }
 
             $totalEntries += array_sum($counts);
-        }
 
-        // Today's & yesterday's stats
-        $today = date('Y-m-d');
-        $yesterday = date('Y-m-d', strtotime('yesterday'));
-        $todayCounts = [];
-        $todayTotal = 0;
-        $yesterdayCounts = [];
-        $yesterdayTotal = 0;
-
-        foreach ($files as $file) {
-            $path = $this->safePath($file['name']);
-            if (!$path || !File::exists($path) || File::size($path) > $this->maxFileSize) {
-                continue;
-            }
-
-            $entries = $this->getCachedEntries($file['name'], $path);
+            // Today + yesterday stats in the same loop
             foreach ($entries as $entry) {
                 $entryDate = substr($entry['date'], 0, 10);
                 $l = $entry['level'];
@@ -574,90 +582,92 @@ class LogManService
     }
 
     // ─── Review Operations ────────────────────────────────────
+    // Reviews are stored in a separate JSON file instead of modifying log files.
+    // This avoids rewriting multi-MB log files for each review action.
+
+    protected function getReviewsPath(): string
+    {
+        return config('logman.storage_path', storage_path('logman')) . '/reviews.json';
+    }
+
+    protected function loadReviews(): array
+    {
+        $path = $this->getReviewsPath();
+        if (!File::exists($path)) {
+            return [];
+        }
+        return json_decode(File::get($path), true) ?: [];
+    }
+
+    protected function saveReviews(array $reviews): bool
+    {
+        $path = $this->getReviewsPath();
+        $dir = dirname($path);
+        if (!File::isDirectory($dir)) {
+            File::makeDirectory($dir, 0755, true);
+        }
+
+        $json = json_encode($reviews, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $tmpPath = $path . '.tmp.' . getmypid();
+        if (file_put_contents($tmpPath, $json, LOCK_EX) !== false) {
+            return rename($tmpPath, $path);
+        }
+        @unlink($tmpPath);
+        return false;
+    }
+
+    /**
+     * Apply review data from the separate reviews file onto parsed entries.
+     */
+    protected function applyReviews(array &$entries, string $filename): void
+    {
+        $reviews = $this->loadReviews();
+        if (empty($reviews)) {
+            return;
+        }
+
+        foreach ($entries as &$entry) {
+            $key = $filename . ':' . $entry['hash'];
+            if (isset($reviews[$key])) {
+                $r = $reviews[$key];
+                $entry['reviewed'] = true;
+                $entry['review_status'] = $r['status'] ?? 'reviewed';
+                $entry['review_note'] = $r['note'] ?? '';
+                $entry['review_by'] = $r['by'] ?? '';
+                $entry['review_at'] = $r['at'] ?? '';
+            }
+        }
+        unset($entry);
+    }
 
     public function addReview(string $filename, string $hash, string $status = 'reviewed', string $note = '', ?string $by = null): bool
     {
-        $path = $this->safePath($filename);
-        if (!$path || !File::exists($path)) {
-            return false;
-        }
+        $reviews = $this->loadReviews();
+        $key = $filename . ':' . $hash;
 
-        $content = File::get($path);
-        $lines = explode("\n", $content);
-        $pattern = '/\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}\.?\d*[\+\-]?\d{0,4})\]\s+(\w+)\.(\w+):\s*(.*)/';
-        $result = [];
-        $currentEntryStart = null;
-        $currentHash = null;
-
-        for ($i = 0; $i < count($lines); $i++) {
-            $line = $lines[$i];
-
-            if (preg_match($pattern, $line, $matches)) {
-                $currentHash = md5($matches[1] . '|' . strtolower($matches[3]) . '|' . $matches[4]);
-                $currentEntryStart = count($result);
-            }
-
-            // Skip existing #REVIEWED for this entry if we're updating it
-            if (str_starts_with($line, '#REVIEWED ') && $currentHash === $hash) {
-                continue;
-            }
-
-            $result[] = $line;
-
-            // If this is the entry we want to review, find the end and insert
-            if ($currentHash === $hash) {
-                // Check if next line is a new entry or end of file
-                $nextLine = $lines[$i + 1] ?? null;
-                $isEndOfEntry = $nextLine === null
-                    || preg_match($pattern, $nextLine)
-                    || str_starts_with($nextLine, '#REVIEWED ');
-
-                // If the current line is the log entry line itself, we need to check further
-                // We insert after all stack trace lines
-                if ($isEndOfEntry || ($i + 1 >= count($lines))) {
-                    $reviewData = json_encode([
-                        'status' => $status,
-                        'note' => $note,
-                        'by' => $by ?? '',
-                        'at' => now()->toDateTimeString(),
-                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                    $result[] = '#REVIEWED ' . $reviewData;
-                    $currentHash = null; // Prevent double insertion
-                }
-            }
-        }
+        $reviews[$key] = [
+            'status' => $status,
+            'note' => $note,
+            'by' => $by ?? '',
+            'at' => now()->toDateTimeString(),
+        ];
 
         $this->clearFileCache($filename);
-        return File::put($path, implode("\n", $result)) !== false;
+        return $this->saveReviews($reviews);
     }
 
     public function removeReview(string $filename, string $hash): bool
     {
-        $path = $this->safePath($filename);
-        if (!$path || !File::exists($path)) {
+        $reviews = $this->loadReviews();
+        $key = $filename . ':' . $hash;
+
+        if (!isset($reviews[$key])) {
             return false;
         }
 
-        $content = File::get($path);
-        $lines = explode("\n", $content);
-        $pattern = '/\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}\.?\d*[\+\-]?\d{0,4})\]\s+(\w+)\.(\w+):\s*(.*)/';
-        $result = [];
-        $currentHash = null;
-
-        foreach ($lines as $line) {
-            if (preg_match($pattern, $line, $matches)) {
-                $currentHash = md5($matches[1] . '|' . strtolower($matches[3]) . '|' . $matches[4]);
-            }
-
-            if (str_starts_with($line, '#REVIEWED ') && $currentHash === $hash) {
-                continue;
-            }
-
-            $result[] = $line;
-        }
-
+        unset($reviews[$key]);
         $this->clearFileCache($filename);
-        return File::put($path, implode("\n", $result)) !== false;
+        return $this->saveReviews($reviews);
     }
 
     // ─── Grouping ──────────────────────────────────────────────
@@ -769,6 +779,68 @@ class LogManService
         }
 
         return null;
+    }
+
+    // ─── Bookmarks ──────────────────────────────────────────
+
+    protected ?array $cachedBookmarks = null;
+
+    protected function getBookmarksPath(): string
+    {
+        return config('logman.storage_path', storage_path('logman')) . '/bookmarks.json';
+    }
+
+    public function getBookmarks(): array
+    {
+        if ($this->cachedBookmarks !== null) {
+            return $this->cachedBookmarks;
+        }
+
+        $path = $this->getBookmarksPath();
+        if (!File::exists($path)) {
+            $this->cachedBookmarks = [];
+            return [];
+        }
+
+        $this->cachedBookmarks = json_decode(File::get($path), true) ?: [];
+        return $this->cachedBookmarks;
+    }
+
+    public function addBookmark(string $file, string $hash, array $entry, string $note = ''): void
+    {
+        $bookmarks = $this->getBookmarks();
+
+        $bookmarks[] = [
+            'id' => md5($file . $hash . microtime()),
+            'file' => $file,
+            'hash' => $hash,
+            'level' => $entry['level'],
+            'message' => mb_substr($entry['message'], 0, 200),
+            'exception_class' => $entry['exception_class'] ?? '',
+            'date' => $entry['date'],
+            'note' => $note,
+            'bookmarked_at' => now()->toDateTimeString(),
+        ];
+
+        $this->saveBookmarks($bookmarks);
+    }
+
+    public function removeBookmark(string $id): void
+    {
+        $bookmarks = $this->getBookmarks();
+        $bookmarks = array_values(array_filter($bookmarks, fn($b) => $b['id'] !== $id));
+        $this->saveBookmarks($bookmarks);
+    }
+
+    protected function saveBookmarks(array $bookmarks): void
+    {
+        $storagePath = dirname($this->getBookmarksPath());
+        if (!File::isDirectory($storagePath)) {
+            File::makeDirectory($storagePath, 0755, true);
+        }
+
+        File::put($this->getBookmarksPath(), json_encode($bookmarks, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $this->cachedBookmarks = $bookmarks;
     }
 
     protected function emptyResult(int $perPage, int $page): array

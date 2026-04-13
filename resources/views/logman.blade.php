@@ -376,6 +376,22 @@
                             </a>
                         @endforeach
                     </div>
+
+                    <span style="color:var(--border);margin:0 4px;">|</span>
+
+                    <div class="review-filter">
+                        @php
+                            $bookmarkFilter = request('bookmark_filter');
+                            $bmOptions = [null => 'All', 'bookmarked' => 'Bookmarked', 'not_bookmarked' => 'Not Bookmarked'];
+                        @endphp
+                        @foreach($bmOptions as $bmVal => $bmLabel)
+                            @php $isBmActive = $bmVal === '' ? empty($bookmarkFilter) : ($bookmarkFilter === $bmVal); @endphp
+                            <a href="{{ route('logman.index', array_merge(request()->query(), ['bookmark_filter' => $bmVal, 'page' => 1])) }}"
+                               class="review-filter-btn {{ $isBmActive ? 'active' : '' }}">
+                                {{ $bmLabel }}
+                            </a>
+                        @endforeach
+                    </div>
                 </div>
 
                 @if(session('success'))
@@ -410,7 +426,7 @@
                                             <td class="env-col">{{ $entry['env'] }}</td>
                                             <td class="date-col">{{ $entry['date'] }}</td>
                                             <td class="message-col">
-                                                {!! $search ? highlightSearch(e($entry['message']), $search) : e($entry['message']) !!}
+                                                {!! $search ? highlightSearch(e($entry['message']), $search, $isRegex) : e($entry['message']) !!}
                                                 @if(!empty($entry['reviewed']))
                                                     <span class="review-indicator">
                                                         &#10003; {{ ucfirst($entry['review_status'] ?? 'reviewed') }}
@@ -446,18 +462,27 @@
                                                             </div>
                                                         </div>
                                                     @endif
+                                                    {{-- Bookmark --}}
+                                                    @if(isset($bookmarkedHashes[$entry['hash']]))
+                                                        <form method="POST" action="{{ route('logman.unbookmark') }}" style="display:inline;">
+                                                            @csrf
+                                                            <input type="hidden" name="id" value="{{ $bookmarkedHashes[$entry['hash']] }}">
+                                                            <button type="submit" class="mute-btn" style="color:var(--warning-text);border-color:var(--warning-border);background:var(--warning-bg);" title="Remove bookmark"><svg width="14" height="14" viewBox="0 0 24 24" fill="var(--warning-text)" stroke="var(--warning-text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+                                                        </form>
+                                                    @else
+                                                        <form method="POST" action="{{ route('logman.bookmark') }}" style="display:inline;">
+                                                            @csrf
+                                                            <input type="hidden" name="file" value="{{ $selectedFile }}">
+                                                            <input type="hidden" name="hash" value="{{ $entry['hash'] }}">
+                                                            <button type="submit" class="mute-btn" title="Bookmark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+                                                        </form>
+                                                    @endif
                                                     @if(!empty($entry['reviewed']))
                                                         @php
                                                             $statusLabels = ['reviewed' => 'Reviewed', 'in_progress' => 'In Progress', 'wont_fix' => "Won't Fix"];
                                                             $currentStatus = $entry['review_status'] ?? 'reviewed';
                                                         @endphp
-                                                        <button class="review-btn {{ $currentStatus }}" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}', '{{ $currentStatus }}', '{{ addslashes($entry['review_note'] ?? '') }}')" title="{{ $statusLabels[$currentStatus] ?? 'Reviewed' }}{{ $entry['review_note'] ? ': ' . $entry['review_note'] : '' }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
-                                                        <form method="POST" action="{{ route('logman.unreview') }}" style="display:inline;">
-                                                            @csrf
-                                                            <input type="hidden" name="file" value="{{ $selectedFile }}">
-                                                            <input type="hidden" name="hash" value="{{ $entry['hash'] }}">
-                                                            <button type="submit" class="review-btn" title="Remove review"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-                                                        </form>
+                                                        <button class="review-btn {{ $currentStatus }}" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}', '{{ $currentStatus }}', '{{ addslashes($entry['review_note'] ?? '') }}', true)" title="{{ $statusLabels[$currentStatus] ?? 'Reviewed' }}{{ $entry['review_note'] ? ': ' . $entry['review_note'] : '' }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
                                                     @else
                                                         <button class="review-btn" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}')" title="Mark as Reviewed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
                                                     @endif
@@ -536,44 +561,7 @@
                                         @if($hasDetails)
                                             <tr class="detail-row" id="detail-{{ $i }}">
                                                 <td colspan="6">
-                                                    <div class="detail-content">
-                                                        <div class="detail-tabs">
-                                                            @if($entry['stack'])
-                                                                <button class="detail-tab active" onclick="showPane({{ $i }}, 'stack', this)">Stack Trace</button>
-                                                            @endif
-                                                            @if($entry['context'])
-                                                                <button class="detail-tab {{ !$entry['stack'] ? 'active' : '' }}" onclick="showPane({{ $i }}, 'context', this)">Context</button>
-                                                            @endif
-                                                            <button class="detail-tab" onclick="showPane({{ $i }}, 'raw', this)">Raw</button>
-                                                        </div>
-                                                        <div class="detail-search">
-                                                            <input type="text" placeholder="Search in content..." oninput="searchInDetail(this, {{ $i }})" onkeydown="if(event.key==='Enter'){event.preventDefault();detailSearchNav({{ $i }}, event.shiftKey?-1:1)}">
-                                                            <span class="detail-search-info" id="detail-search-info-{{ $i }}"></span>
-                                                            <div class="detail-search-nav">
-                                                                <button onclick="detailSearchNav({{ $i }}, -1)" title="Previous">{!! '&#8593;' !!}</button>
-                                                                <button onclick="detailSearchNav({{ $i }}, 1)" title="Next">{!! '&#8595;' !!}</button>
-                                                            </div>
-                                                        </div>
-                                                        @if($entry['stack'])
-                                                            <div class="detail-pane active detail-pane-wrap" id="pane-{{ $i }}-stack">
-                                                                <button class="copy-btn" onclick="copyText(this, {{ $i }}, 'stack')">Copy</button>
-                                                                <div class="stack-content">{!! $search ? highlightSearch(e($entry['stack']), $search) : e($entry['stack']) !!}</div>
-                                                            </div>
-                                                        @endif
-                                                        @if($entry['context'])
-                                                            <div class="detail-pane {{ !$entry['stack'] ? 'active' : '' }} detail-pane-wrap" id="pane-{{ $i }}-context">
-                                                                <button class="copy-btn" onclick="copyText(this, {{ $i }}, 'context')">Copy</button>
-                                                                <div class="context-content">{!! $search ? highlightSearch(e($entry['context']), $search) : e($entry['context']) !!}</div>
-                                                            </div>
-                                                        @endif
-                                                        @php
-                                                            $rawText = '[' . $entry['date'] . '] ' . $entry['env'] . '.' . strtoupper($entry['level']) . ': ' . $entry['message'] . "\n" . $entry['stack'];
-                                                        @endphp
-                                                        <div class="detail-pane detail-pane-wrap" id="pane-{{ $i }}-raw">
-                                                            <button class="copy-btn" onclick="copyText(this, {{ $i }}, 'raw')">Copy</button>
-                                                            <div class="stack-content">{!! $search ? highlightSearch(e($rawText), $search) : e($rawText) !!}</div>
-                                                        </div>
-                                                    </div>
+                                                    @include('logman::partials._entry-detail', ['entry' => $entry, 'i' => $i, 'search' => $search, 'isRegex' => $isRegex])
                                                 </td>
                                             </tr>
                                         @endif
@@ -923,13 +911,28 @@ function escapeRegex(str) {
 }
 
 // ─── Review Modal ──────────────────────────────────────────
-function openReviewModal(file, hash, status, note) {
+function openReviewModal(file, hash, status, note, isReviewed) {
     const modal = document.getElementById('reviewModal');
-    modal.querySelector('[name="file"]').value = file;
-    modal.querySelector('[name="hash"]').value = hash;
+    modal.querySelector('#reviewForm [name="file"]').value = file;
+    modal.querySelector('#reviewForm [name="hash"]').value = hash;
     modal.querySelector('[name="status"]').value = status || 'reviewed';
     modal.querySelector('[name="note"]').value = note || '';
+
+    const unreviewBtn = document.getElementById('unreviewBtn');
+    const unreviewForm = document.getElementById('unreviewForm');
+    if (isReviewed) {
+        unreviewBtn.style.display = '';
+        unreviewForm.querySelector('[name="file"]').value = file;
+        unreviewForm.querySelector('[name="hash"]').value = hash;
+    } else {
+        unreviewBtn.style.display = 'none';
+    }
+
     modal.classList.add('open');
+}
+
+function submitUnreview() {
+    document.getElementById('unreviewForm').submit();
 }
 
 function closeReviewModal() {
@@ -1010,7 +1013,7 @@ document.addEventListener('click', function(e) {
 <div class="modal-overlay" id="reviewModal" onclick="if(event.target===this)closeReviewModal()">
     <div class="modal">
         <h3>Review Entry</h3>
-        <form method="POST" action="{{ route('logman.review') }}">
+        <form method="POST" action="{{ route('logman.review') }}" id="reviewForm">
             @csrf
             <input type="hidden" name="file" value="">
             <input type="hidden" name="hash" value="">
@@ -1027,12 +1030,18 @@ document.addEventListener('click', function(e) {
                 <textarea name="note" placeholder="Add a note about this error..."></textarea>
             </div>
             <div class="modal-actions">
+                <button type="button" class="btn btn-sm btn-danger" id="unreviewBtn" style="display:none;margin-right:auto;" onclick="submitUnreview()">Remove Review</button>
                 <button type="button" class="btn btn-sm" onclick="closeReviewModal()">Cancel</button>
                 <button type="submit" class="btn btn-sm btn-primary">Save</button>
             </div>
         </form>
     </div>
 </div>
+<form method="POST" action="{{ route('logman.unreview') }}" id="unreviewForm" style="display:none;">
+    @csrf
+    <input type="hidden" name="file" value="">
+    <input type="hidden" name="hash" value="">
+</form>
 
 {{-- Mute Modal --}}
 <div class="modal-overlay" id="muteModal" onclick="if(event.target===this)closeMuteModal()">

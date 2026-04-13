@@ -56,19 +56,95 @@ class MuteService
     public function flushAll(): void
     {
         if ($this->mutesDirty && $this->cachedMutes !== null) {
-            $this->writeFile($this->mutesFile, $this->cachedMutes, true);
+            $this->mergeAndWrite($this->mutesFile, $this->cachedMutes, fn($item) => $item['id'], true);
             $this->mutesDirty = false;
         }
 
         if ($this->rateLimitsDirty && $this->cachedRateLimits !== null) {
-            $this->writeFile($this->rateLimitsFile, $this->cachedRateLimits);
+            $this->mergeAndWriteAssoc($this->rateLimitsFile, $this->cachedRateLimits);
             $this->rateLimitsDirty = false;
         }
 
         if ($this->throttlesDirty && $this->cachedThrottles !== null) {
-            $this->writeFile($this->throttlesFile, $this->cachedThrottles, true);
+            $this->mergeAndWrite($this->throttlesFile, $this->cachedThrottles, fn($item) => $item['id'], true);
             $this->throttlesDirty = false;
         }
+    }
+
+    /**
+     * Merge indexed arrays (mutes, throttles) with disk state before writing.
+     * Lock → read latest from disk → merge (local wins by key) → atomic write.
+     */
+    protected function mergeAndWrite(string $path, array $localData, callable $keyFn, bool $pretty = false): void
+    {
+        $this->ensureStorageExists();
+
+        $handle = fopen($path, 'c+');
+        if (!$handle || !flock($handle, LOCK_EX)) {
+            if ($handle) fclose($handle);
+            $this->writeFile($path, $localData, $pretty);
+            return;
+        }
+
+        $diskContent = stream_get_contents($handle);
+        $diskData = json_decode($diskContent, true) ?: [];
+
+        // Merge: local entries win by key
+        $merged = [];
+        $seen = [];
+        foreach ($localData as $item) {
+            $key = $keyFn($item);
+            $merged[] = $item;
+            $seen[$key] = true;
+        }
+        foreach ($diskData as $item) {
+            $key = $keyFn($item);
+            if (!isset($seen[$key])) {
+                $merged[] = $item;
+            }
+        }
+
+        $flags = $pretty
+            ? JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            : 0;
+        $json = json_encode(array_values($merged), $flags);
+
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, $json);
+        fflush($handle);
+        flock($handle, LOCK_UN);
+        fclose($handle);
+    }
+
+    /**
+     * Merge associative arrays (rate limits) with disk state before writing.
+     */
+    protected function mergeAndWriteAssoc(string $path, array $localData): void
+    {
+        $this->ensureStorageExists();
+
+        $handle = fopen($path, 'c+');
+        if (!$handle || !flock($handle, LOCK_EX)) {
+            if ($handle) fclose($handle);
+            $this->writeFile($path, $localData);
+            return;
+        }
+
+        $diskContent = stream_get_contents($handle);
+        $diskData = json_decode($diskContent, true) ?: [];
+
+        // Merge: local keys win
+        $merged = array_merge($diskData, $localData);
+
+        $json = json_encode($merged);
+
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, $json);
+        fflush($handle);
+        flock($handle, LOCK_UN);
+        fclose($handle);
     }
 
     protected function writeFile(string $path, array $data, bool $pretty = false): void
@@ -79,18 +155,12 @@ class MuteService
             : 0;
         $json = json_encode($data, $flags);
 
-        $handle = fopen($path, 'c');
-        if ($handle && flock($handle, LOCK_EX)) {
-            ftruncate($handle, 0);
-            fwrite($handle, $json);
-            fflush($handle);
-            flock($handle, LOCK_UN);
-            fclose($handle);
+        // Atomic write: temp file + rename (safe against crash between truncate and write)
+        $tmpPath = $path . '.tmp.' . getmypid();
+        if (file_put_contents($tmpPath, $json, LOCK_EX) !== false) {
+            rename($tmpPath, $path);
         } else {
-            if ($handle) {
-                fclose($handle);
-            }
-            File::put($path, $json);
+            @unlink($tmpPath);
         }
     }
 
@@ -189,10 +259,7 @@ class MuteService
         $message = $throwable->getMessage();
 
         foreach ($mutes as &$mute) {
-            $classMatch = $mute['exception_class'] === $class
-                || str_contains($class, $mute['exception_class'])
-                || str_contains($message, $mute['exception_class'])
-                || str_contains($mute['exception_class'], $class);
+            $classMatch = $this->classMatches($class, $mute['exception_class']);
             $patternMatch = empty($mute['message_pattern'])
                 || str_contains($message, $mute['message_pattern']);
 
@@ -275,10 +342,7 @@ class MuteService
         $now = now();
 
         foreach ($throttles as &$throttle) {
-            $classMatch = $throttle['exception_class'] === $class
-                || str_contains($class, $throttle['exception_class'])
-                || str_contains($message, $throttle['exception_class'])
-                || str_contains($throttle['exception_class'], $class);
+            $classMatch = $this->classMatches($class, $throttle['exception_class']);
             $patternMatch = empty($throttle['message_pattern'])
                 || str_contains($message, $throttle['message_pattern']);
 
@@ -372,7 +436,12 @@ class MuteService
 
     protected function getRateLimitKey(Throwable $throwable): string
     {
-        return md5(get_class($throwable) . '|' . $throwable->getFile() . '|' . $throwable->getLine());
+        return md5(
+            get_class($throwable) . '|'
+            . $throwable->getFile() . '|'
+            . $throwable->getLine() . '|'
+            . substr($throwable->getMessage(), 0, 100)
+        );
     }
 
     protected function getRateLimits(): array
@@ -417,6 +486,44 @@ class MuteService
         $this->writeFile($this->throttlesFile, $throttles, true);
         $this->cachedThrottles = $throttles;
         $this->throttlesDirty = false;
+    }
+
+    // ─── Class Matching ──────────────────────────────────────
+
+    /**
+     * Match an actual exception class against a mute/throttle class pattern.
+     *
+     * Supports:
+     *   - Exact FQN match: "App\Exceptions\CustomException"
+     *   - Short class name: "CustomException" matches "App\Exceptions\CustomException"
+     *   - Namespace prefix: "App\Exceptions\" matches anything under that namespace
+     *   - Wildcard: "App\*Exception" matches "App\CustomException"
+     */
+    protected function classMatches(string $actualClass, string $muteClass): bool
+    {
+        // Exact match
+        if ($actualClass === $muteClass) {
+            return true;
+        }
+
+        // Short name match: "RuntimeException" matches "App\Exceptions\RuntimeException"
+        $shortActual = class_basename($actualClass);
+        if ($muteClass === $shortActual) {
+            return true;
+        }
+
+        // Namespace prefix: "App\Exceptions\" matches everything under that namespace
+        if (str_ends_with($muteClass, '\\') && str_starts_with($actualClass, $muteClass)) {
+            return true;
+        }
+
+        // Wildcard: "App\*Exception" matches "App\CustomException"
+        if (str_contains($muteClass, '*')) {
+            $pattern = '/^' . str_replace('\\*', '.*', preg_quote($muteClass, '/')) . '$/';
+            return (bool) preg_match($pattern, $actualClass);
+        }
+
+        return false;
     }
 
     // ─── Helpers ──────────────────────────────────────────────

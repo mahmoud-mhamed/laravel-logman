@@ -46,10 +46,14 @@ class LogManController extends Controller
         $page = (int) $request->get('page', 1);
 
         $muteFilter = $request->get('mute_filter') ?: null;
+        $bookmarkFilter = $request->get('bookmark_filter') ?: null;
 
         $muteService = app(MuteService::class);
         $activeMutes = $muteService->getMutes();
         $activeThrottles = $muteService->getThrottles();
+
+        $allBookmarks = $this->viewer->getBookmarks();
+        $bookmarkedHashList = collect($allBookmarks)->pluck('hash')->all();
 
         $logData = ['entries' => null, 'too_large' => false, 'level_counts' => [], 'has_multiple_dates' => false];
         if ($selectedFile) {
@@ -58,6 +62,7 @@ class LogManController extends Controller
                 $dateFrom, $dateTo, $timeFrom, $timeTo,
                 $sortDirection, $page, $perPage, $reviewFilter, $reviewStatus,
                 $muteFilter, $activeMutes, $activeThrottles,
+                $bookmarkFilter, $bookmarkedHashList,
             );
         }
 
@@ -65,6 +70,8 @@ class LogManController extends Controller
             ->filter(fn($settings) => !empty($settings['enabled']))
             ->keys()
             ->all();
+
+        $bookmarkedHashes = collect($allBookmarks)->pluck('id', 'hash')->all();
 
         return view('logman::logman', [
             'files' => $files,
@@ -87,6 +94,7 @@ class LogManController extends Controller
             'activeMutes' => $activeMutes,
             'activeThrottles' => $activeThrottles,
             'enabledChannels' => $enabledChannels,
+            'bookmarkedHashes' => $bookmarkedHashes,
         ]);
     }
 
@@ -324,28 +332,46 @@ class LogManController extends Controller
             ],
             'Channel: Slack' => [
                 ['key' => 'channels.slack.enabled', 'label' => 'Enabled', 'value' => $channels['slack']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Enable Slack notifications'],
-                ['key' => 'channels.slack.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['slack']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions to this channel'],
+                ['key' => 'channels.slack.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['slack']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions'],
+                ['key' => 'channels.slack.min_level', 'label' => 'Min Level', 'value' => $channels['slack']['min_level'] ?? 'debug', 'type' => 'string', 'description' => 'Minimum log level to report'],
+                ['key' => 'channels.slack.queue', 'label' => 'Queue', 'value' => $channels['slack']['queue'] ?? false, 'type' => 'bool', 'description' => 'Send via queue (async)'],
+                ['key' => 'channels.slack.retries', 'label' => 'Retries', 'value' => $channels['slack']['retries'] ?? 0, 'type' => 'number', 'description' => 'Retry attempts on failure'],
+                ['key' => 'channels.slack.throttle', 'label' => 'Throttle (s)', 'value' => $channels['slack']['throttle'] ?? 0, 'type' => 'number', 'description' => 'Per-channel cooldown in seconds'],
                 ['key' => 'channels.slack.log_channel', 'label' => 'Log Channel', 'value' => $channels['slack']['log_channel'] ?? 'slack', 'type' => 'string', 'description' => 'Laravel logging channel name'],
-                ['key' => 'slack_channel_config.url', 'label' => 'Webhook URL', 'value' => !empty($config['slack_channel_config']['url']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Slack incoming webhook URL (LOG_SLACK_WEBHOOK_URL)'],
-                ['key' => 'slack_channel_config.username', 'label' => 'Bot Username', 'value' => $config['slack_channel_config']['username'] ?? '-', 'type' => 'string', 'description' => 'Display name for the Slack bot'],
-                ['key' => 'slack_channel_config.emoji', 'label' => 'Bot Emoji', 'value' => $config['slack_channel_config']['emoji'] ?? '-', 'type' => 'string', 'description' => 'Emoji icon for the bot'],
+                ['key' => 'slack_channel_config.url', 'label' => 'Webhook URL', 'value' => !empty($config['slack_channel_config']['url']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Slack webhook URL'],
             ],
             'Channel: Telegram' => [
                 ['key' => 'channels.telegram.enabled', 'label' => 'Enabled', 'value' => $channels['telegram']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Enable Telegram notifications'],
-                ['key' => 'channels.telegram.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['telegram']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions to this channel'],
-                ['key' => 'channels.telegram.bot_token', 'label' => 'Bot Token', 'value' => !empty($channels['telegram']['bot_token']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Telegram bot token (LOGMAN_TELEGRAM_BOT_TOKEN)'],
-                ['key' => 'channels.telegram.chat_id', 'label' => 'Chat ID', 'value' => !empty($channels['telegram']['chat_id']) ? $channels['telegram']['chat_id'] : 'NOT SET', 'type' => !empty($channels['telegram']['chat_id']) ? 'string' : 'status', 'description' => 'Telegram chat/group ID (LOGMAN_TELEGRAM_CHAT_ID)'],
+                ['key' => 'channels.telegram.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['telegram']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions'],
+                ['key' => 'channels.telegram.min_level', 'label' => 'Min Level', 'value' => $channels['telegram']['min_level'] ?? 'error', 'type' => 'string', 'description' => 'Minimum log level to report'],
+                ['key' => 'channels.telegram.queue', 'label' => 'Queue', 'value' => $channels['telegram']['queue'] ?? true, 'type' => 'bool', 'description' => 'Send via queue (async)'],
+                ['key' => 'channels.telegram.retries', 'label' => 'Retries', 'value' => $channels['telegram']['retries'] ?? 2, 'type' => 'number', 'description' => 'Retry attempts on failure'],
+                ['key' => 'channels.telegram.throttle', 'label' => 'Throttle (s)', 'value' => $channels['telegram']['throttle'] ?? 0, 'type' => 'number', 'description' => 'Per-channel cooldown in seconds'],
+                ['key' => 'channels.telegram.bot_token', 'label' => 'Bot Token', 'value' => !empty($channels['telegram']['bot_token']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Telegram bot token'],
+                ['key' => 'channels.telegram.chat_id', 'label' => 'Chat ID', 'value' => !empty($channels['telegram']['chat_id']) ? $channels['telegram']['chat_id'] : 'NOT SET', 'type' => !empty($channels['telegram']['chat_id']) ? 'string' : 'status', 'description' => 'Telegram chat/group ID'],
             ],
             'Channel: Discord' => [
                 ['key' => 'channels.discord.enabled', 'label' => 'Enabled', 'value' => $channels['discord']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Enable Discord notifications'],
-                ['key' => 'channels.discord.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['discord']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions to this channel'],
-                ['key' => 'channels.discord.webhook_url', 'label' => 'Webhook URL', 'value' => !empty($channels['discord']['webhook_url']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Discord webhook URL (LOGMAN_DISCORD_WEBHOOK)'],
+                ['key' => 'channels.discord.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['discord']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions'],
+                ['key' => 'channels.discord.min_level', 'label' => 'Min Level', 'value' => $channels['discord']['min_level'] ?? 'error', 'type' => 'string', 'description' => 'Minimum log level to report'],
+                ['key' => 'channels.discord.queue', 'label' => 'Queue', 'value' => $channels['discord']['queue'] ?? true, 'type' => 'bool', 'description' => 'Send via queue (async)'],
+                ['key' => 'channels.discord.retries', 'label' => 'Retries', 'value' => $channels['discord']['retries'] ?? 2, 'type' => 'number', 'description' => 'Retry attempts on failure'],
+                ['key' => 'channels.discord.throttle', 'label' => 'Throttle (s)', 'value' => $channels['discord']['throttle'] ?? 0, 'type' => 'number', 'description' => 'Per-channel cooldown in seconds'],
+                ['key' => 'channels.discord.webhook_url', 'label' => 'Webhook URL', 'value' => !empty($channels['discord']['webhook_url']) ? '***configured***' : 'NOT SET', 'type' => 'status', 'description' => 'Discord webhook URL'],
             ],
             'Channel: Mail' => [
                 ['key' => 'channels.mail.enabled', 'label' => 'Enabled', 'value' => $channels['mail']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Enable email notifications'],
-                ['key' => 'channels.mail.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['mail']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions to this channel'],
-                ['key' => 'channels.mail.to', 'label' => 'Recipients', 'value' => array_filter((array) ($channels['mail']['to'] ?? [])), 'type' => 'list', 'description' => 'Email addresses to receive notifications (LOGMAN_MAIL_TO)'],
-                ['key' => 'channels.mail.from', 'label' => 'From', 'value' => $channels['mail']['from'] ?? config('mail.from.address') ?? '-', 'type' => 'string', 'description' => 'Sender address (LOGMAN_MAIL_FROM)'],
+                ['key' => 'channels.mail.auto_report_exceptions', 'label' => 'Auto-Report', 'value' => $channels['mail']['auto_report_exceptions'] ?? true, 'type' => 'bool', 'description' => 'Auto-report exceptions'],
+                ['key' => 'channels.mail.min_level', 'label' => 'Min Level', 'value' => $channels['mail']['min_level'] ?? 'critical', 'type' => 'string', 'description' => 'Minimum log level to report'],
+                ['key' => 'channels.mail.queue', 'label' => 'Queue', 'value' => $channels['mail']['queue'] ?? true, 'type' => 'bool', 'description' => 'Send via queue (async)'],
+                ['key' => 'channels.mail.retries', 'label' => 'Retries', 'value' => $channels['mail']['retries'] ?? 1, 'type' => 'number', 'description' => 'Retry attempts on failure'],
+                ['key' => 'channels.mail.throttle', 'label' => 'Throttle (s)', 'value' => $channels['mail']['throttle'] ?? 60, 'type' => 'number', 'description' => 'Per-channel cooldown in seconds'],
+                ['key' => 'channels.mail.to', 'label' => 'Recipients', 'value' => array_filter((array) ($channels['mail']['to'] ?? [])), 'type' => 'list', 'description' => 'Email recipients'],
+                ['key' => 'channels.mail.from', 'label' => 'From', 'value' => $channels['mail']['from'] ?? config('mail.from.address') ?? '-', 'type' => 'string', 'description' => 'Sender address'],
+            ],
+            'Daily Digest' => [
+                ['key' => 'daily_digest.enabled', 'label' => 'Enabled', 'value' => $config['daily_digest']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Automatically send a daily digest summary (no manual scheduler setup needed)'],
+                ['key' => 'daily_digest.time', 'label' => 'Send Time', 'value' => $config['daily_digest']['time'] ?? '09:00', 'type' => 'string', 'description' => 'Time to send the digest (24h format, server timezone)'],
             ],
             'Rate Limiting' => [
                 ['key' => 'rate_limit.enabled', 'label' => 'Enabled', 'value' => $config['rate_limit']['enabled'] ?? true, 'type' => 'bool', 'description' => 'Prevent the same exception from flooding notifications'],
@@ -460,6 +486,144 @@ class LogManController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', "Failed to send to {$channelName}: " . $e->getMessage());
         }
+    }
+
+    // ─── Grouped Errors ───────────────────────────────────
+
+    public function grouped(Request $request)
+    {
+        $files = $this->viewer->getFiles();
+        $selectedFile = $request->get('file', $files->first()['name'] ?? null);
+        $groups = [];
+
+        if ($selectedFile) {
+            $groups = $this->viewer->getGroupedEntries($selectedFile);
+
+            // Resolve the first entry for each group to show details
+            foreach ($groups as &$group) {
+                $group['full_entry'] = null;
+                if (!empty($group['hashes'][0])) {
+                    $group['full_entry'] = $this->viewer->findEntryByHash($selectedFile, $group['hashes'][0]);
+                }
+            }
+            unset($group);
+        }
+
+        return view('logman::grouped', [
+            'files' => $files,
+            'selectedFile' => $selectedFile,
+            'groups' => $groups,
+        ]);
+    }
+
+    // ─── Export ────────────────────────────────────────────
+
+    public function export(Request $request)
+    {
+        $file = $request->get('file');
+        $format = $request->get('format', 'json');
+        $level = $request->get('level');
+        $search = $request->get('search');
+
+        if (!$file) {
+            return back()->with('error', 'No file specified.');
+        }
+
+        $result = $this->viewer->getLogEntries(
+            $file,
+            level: $level !== 'all' ? $level : null,
+            search: $search,
+            perPage: 999999,
+        );
+
+        $entries = collect($result['entries']->items())->map(fn($e) => [
+            'date' => $e['date'],
+            'env' => $e['env'],
+            'level' => $e['level'],
+            'message' => $e['message'],
+            'exception_class' => $e['exception_class'] ?? '',
+            'exception_file' => $e['exception_file'] ?? '',
+            'exception_line' => $e['exception_line'] ?? '',
+            'stack' => $e['stack'],
+        ])->all();
+
+        if ($format === 'csv') {
+            $csv = $this->buildCsv($entries);
+            return response($csv, 200, [
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => 'attachment; filename="logman-export-' . $file . '.csv"',
+            ]);
+        }
+
+        return response()->json($entries, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+            ->header('Content-Disposition', 'attachment; filename="logman-export-' . $file . '.json"');
+    }
+
+    protected function buildCsv(array $entries): string
+    {
+        $handle = fopen('php://temp', 'r+');
+        fputcsv($handle, ['Date', 'Env', 'Level', 'Message', 'Exception Class', 'File', 'Line']);
+        foreach ($entries as $e) {
+            fputcsv($handle, [
+                $e['date'], $e['env'], $e['level'], $e['message'],
+                $e['exception_class'], $e['exception_file'], $e['exception_line'],
+            ]);
+        }
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+        return $csv;
+    }
+
+    // ─── Bookmarks ────────────────────────────────────────
+
+    public function bookmarks(Request $request)
+    {
+        $bookmarks = $this->viewer->getBookmarks();
+
+        // Resolve full entries for each bookmark
+        $resolvedBookmarks = [];
+        foreach ($bookmarks as $bm) {
+            $fullEntry = $this->viewer->findEntryByHash($bm['file'], $bm['hash']);
+            $bm['full_entry'] = $fullEntry;
+            $resolvedBookmarks[] = $bm;
+        }
+
+        return view('logman::bookmarks', [
+            'bookmarks' => $resolvedBookmarks,
+        ]);
+    }
+
+    public function bookmark(Request $request)
+    {
+        $file = $request->get('file');
+        $hash = $request->get('hash');
+        $note = $request->get('note', '');
+
+        if (!$file || !$hash) {
+            return back()->with('error', 'Missing parameters.');
+        }
+
+        $entry = $this->viewer->findEntryByHash($file, $hash);
+        if (!$entry) {
+            return back()->with('error', 'Log entry not found.');
+        }
+
+        $this->viewer->addBookmark($file, $hash, $entry, $note);
+
+        return back()->with('success', 'Bookmarked.');
+    }
+
+    public function unbookmark(Request $request)
+    {
+        $id = $request->get('id');
+        if (!$id) {
+            return back()->with('error', 'Missing bookmark ID.');
+        }
+
+        $this->viewer->removeBookmark($id);
+
+        return back()->with('success', 'Bookmark removed.');
     }
 
     // ─── About ─────────────────────────────────────────────

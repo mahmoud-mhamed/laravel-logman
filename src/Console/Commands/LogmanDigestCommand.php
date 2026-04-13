@@ -195,6 +195,10 @@ class LogmanDigestCommand extends Command
                 continue;
             }
 
+            if (!$filter && empty($settings['daily_digest'])) {
+                continue;
+            }
+
             $driverClass = $settings['driver'] ?? (static::$drivers[$name] ?? null);
 
             if (is_string($driverClass) && class_exists($driverClass)) {

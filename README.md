@@ -25,7 +25,11 @@ On top of that, Logman ships with a **full-featured log viewer** you can access 
 - **Automatic Exception Reporting** — every unhandled exception, reported with full context
 - **Rich Error Details** — stack trace, request info, auth user, DB queries, job context, environment
 - **Custom Channels** — register your own notification driver with one line
-- **Rate Limiting** — prevents the same exception from flooding your channels (configurable cooldown)
+- **Queue Support** — send notifications asynchronously via Laravel queues
+- **Retry Logic** — configurable retry attempts per channel on failure
+- **Log Level per Channel** — each channel can filter by minimum severity (e.g. Mail = critical only)
+- **Per-Channel Throttle** — independent cooldown per channel per exception
+- **Rate Limiting** — prevents the same exception from flooding your channels (global cooldown)
 - **Mute System** — temporarily silence specific exceptions
 - **Throttle System** — limit how many times an exception is reported per time period
 
@@ -39,7 +43,11 @@ On top of that, Logman ships with a **full-featured log viewer** you can access 
 - **Stack Trace Viewer** — expandable details with tabs (Stack Trace, Context, Raw)
 - **In-Detail Search** — search within stack traces with match navigation (prev/next)
 - **File Management** — download, clear, delete, batch-delete log files
+- **Grouped Errors** — deduplicated view of recurring errors with counts
+- **Export** — download filtered logs as CSV or JSON
+- **Bookmarks** — save log entries for later reference
 - **Config Viewer** — view all package settings from the web UI
+- **About Page** — quick overview of features, channels, commands
 - **Dark Mode** — full dark/light theme with localStorage persistence
 - **Zero Dependencies** — no external CSS/JS frameworks, pure standalone UI
 - **Responsive** — works on desktop and mobile
@@ -59,7 +67,18 @@ On top of that, Logman ships with a **full-featured log viewer** you can access 
 composer require mhamed/laravel-logman
 ```
 
-Laravel auto-discovers the package. No manual registration needed.
+Laravel auto-discovers the package. Then run the install command:
+
+```bash
+php artisan logman:install
+```
+
+This will:
+- Publish the config file (`config/logman.php`)
+- Create the storage directory (`storage/logman`) with `.gitignore`
+- Add all required env variables to `.env` and `.env.example`
+
+> Use `--force` to overwrite an existing config file.
 
 ---
 
@@ -205,27 +224,75 @@ Multiple recipients: use comma-separated emails in `LOGMAN_MAIL_TO`.
 
 ---
 
-### Per-Channel Auto-Report
+### Per-Channel Options
 
-Each channel has its own `auto_report_exceptions` flag. A channel can be `enabled` but not auto-report — useful if you only want to send manually via the log viewer's "Send to Channel" button:
+Every channel supports these options:
+
+| Option | Default | Description |
+|---|---|---|
+| `enabled` | varies | Enable/disable the channel |
+| `auto_report_exceptions` | `true` | Auto-report exceptions (false = manual send only) |
+| `daily_digest` | `true` | Include this channel in the daily digest |
+| `min_level` | `'debug'` | Minimum log level (see levels below) |
+| `queue` | `false` | Send notifications asynchronously via Laravel queues |
+| `retries` | `0` | Number of retry attempts on failure |
+| `throttle` | `0` | Per-channel cooldown in seconds (0 = no per-channel throttle) |
+
+**Available log levels** (from lowest to highest severity):
+
+```
+debug → info → notice → warning → error → critical → alert → emergency
+```
+
+Setting `min_level` to `error` means only `error`, `critical`, `alert`, and `emergency` will be reported to that channel. Setting it to `debug` reports everything.
+
+Example — Slack gets everything sync, Mail only gets critical errors async:
 
 ```php
-'slack'    => ['enabled' => true,  'auto_report_exceptions' => true],   // auto + manual
-'mail'     => ['enabled' => true,  'auto_report_exceptions' => false],  // manual only
+'slack' => ['enabled' => true, 'min_level' => 'debug', 'queue' => false, 'throttle' => 0],
+'mail'  => ['enabled' => true, 'min_level' => 'critical', 'queue' => true, 'retries' => 1, 'throttle' => 60],
 ```
 
 ---
 
-### Rate Limiting
+### Rate Limiting & Throttling
+
+Logman uses **two levels** of protection to prevent notification flooding:
+
+#### Level 1: Global Rate Limit
+
+Runs **first**, before any channel is contacted. If the same exception (same class + file + line) fires again within the cooldown window, it is blocked for **all channels** at once. This is the fast, cheap check that prevents unnecessary work.
 
 | Option | Default | Description |
 |---|---|---|
-| `rate_limit.enabled` | `true` | Enable rate limiting |
-| `rate_limit.cooldown_seconds` | `10` | Seconds before the same exception can be re-reported |
+| `rate_limit.enabled` | `true` | Enable global rate limiting |
+| `rate_limit.cooldown_seconds` | `10` | Seconds before the same exception can be re-reported to any channel |
 
 When an error is re-sent after being rate-limited, the notification includes:
 
 > This error was suppressed 5 time(s) since last report (rate limited).
+
+#### Level 2: Per-Channel Throttle
+
+Runs **second**, independently for each channel. This lets you set different cooldowns per channel — for example, send to Slack every second but limit emails to once per minute.
+
+| Channel | Default | Description |
+|---|---|---|
+| `channels.slack.throttle` | `1` | Slack cooldown in seconds |
+| `channels.telegram.throttle` | `10` | Telegram cooldown in seconds |
+| `channels.discord.throttle` | `10` | Discord cooldown in seconds |
+| `channels.mail.throttle` | `60` | Mail cooldown in seconds |
+
+#### How They Work Together
+
+```
+Exception occurs
+  → Global Rate Limit (blocked? → stop for ALL channels)
+  → Per-Channel Throttle (blocked? → skip THIS channel only)
+  → Send notification
+```
+
+Both checks are lightweight (file read / cache lookup) and **much faster** than the actual HTTP request or email send they prevent. Keeping both levels gives you coarse global protection plus fine-grained per-channel control.
 
 ### Log Viewer Options
 
@@ -247,10 +314,13 @@ When an error is re-sent after being rate-limited, the notification includes:
 | Route | Description |
 |---|---|
 | `/logman` | Browse, search, and filter log files |
-| `/logman/analysis` | Charts, statistics, today's summary |
+| `/logman/analysis` | Charts, statistics, today vs yesterday comparison |
 | `/logman/mutes` | Manage muted exceptions |
 | `/logman/throttles` | Manage throttled exceptions |
+| `/logman/grouped` | Deduplicated view of recurring errors |
+| `/logman/bookmarks` | Saved log entries |
 | `/logman/config` | View all package configuration |
+| `/logman/about` | Package info, features, commands |
 
 ---
 
@@ -393,6 +463,7 @@ Then add it to your config:
 
 | Command | Description |
 |---|---|
+| `logman:install` | Publish config, create storage directory, add env variables |
 | `logman:test` | Send a test notification to all enabled channels |
 | `logman:mute "ClassName" --duration=1d` | Mute an exception from CLI |
 | `logman:list-mutes` | List all active mutes |
@@ -401,11 +472,78 @@ Then add it to your config:
 | `logman:digest --date=2026-04-12` | Digest for a specific date |
 | `logman:digest --channel=slack` | Send digest to a specific channel only |
 
-Schedule it in your `routes/console.php` or `app/Console/Kernel.php`:
+---
+
+## Daily Digest
+
+Logman can send a daily summary of all log activity to your enabled channels (Slack, Telegram, Discord, Mail). The digest includes:
+
+- Total entries and error count
+- Breakdown by log level (emergency, error, warning, info, etc.)
+- Top 5 most frequent errors
+- Per-file entry counts
+
+### Automatic Setup (Recommended)
+
+Enable the daily digest in your `config/logman.php` — no manual scheduler setup needed:
 
 ```php
+'daily_digest' => [
+    'enabled' => true,
+    'time'    => '09:00',  // 24h format, server timezone
+],
+```
+
+Logman will automatically register the scheduled command for you.
+
+### Per-Channel Control
+
+Each channel has its own `daily_digest` flag. A channel can receive real-time exception reports but skip the digest, or vice versa:
+
+```php
+'slack'    => ['enabled' => true,  'daily_digest' => true],   // gets the digest
+'telegram' => ['enabled' => true,  'daily_digest' => false],  // no digest
+'mail'     => ['enabled' => true,  'daily_digest' => true],   // gets the digest
+```
+
+### Manual Setup (Alternative)
+
+If you prefer manual control, you can skip the config flag and schedule it yourself in `routes/console.php` or `app/Console/Kernel.php`:
+
+```php
+// Laravel 11+
+Schedule::command('logman:digest')->dailyAt('09:00');
+
+// Laravel 10 and below (in Kernel.php)
 $schedule->command('logman:digest')->dailyAt('09:00');
 ```
+
+### Options
+
+```bash
+# Send digest for yesterday (default)
+php artisan logman:digest
+
+# Send digest for a specific date
+php artisan logman:digest --date=2026-04-12
+
+# Send to a specific channel only (bypasses per-channel daily_digest flag)
+php artisan logman:digest --channel=slack
+```
+
+---
+
+## Testing
+
+```bash
+composer install
+vendor/bin/phpunit
+```
+
+Tests cover:
+- MuteService (mute, unmute, throttle, rate limiting)
+- LogmanService (exception reporting, custom drivers, ignored exceptions)
+- All routes (index, dashboard, mutes, throttles, grouped, bookmarks, config, about)
 
 ---
 

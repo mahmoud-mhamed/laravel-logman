@@ -37,6 +37,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Daily Digest
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, Logman will automatically schedule a daily digest summary
+    | and send it to all enabled channels. No manual scheduler setup needed.
+    |
+    */
+    'daily_digest' => [
+        'enabled' => false,
+        'time' => '09:00',  // Time to send (24h format, server timezone)
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Notification Channels
     |--------------------------------------------------------------------------
     |
@@ -49,12 +63,24 @@ return [
         'slack' => [
             'enabled' => true,
             'auto_report_exceptions' => true,
-            'log_channel' => 'slack', // Laravel logging channel name
+            'daily_digest' => true,         // Include in daily digest
+            // Levels: debug, info, notice, warning, error, critical, alert, emergency
+            'min_level' => 'debug',         // Minimum log level to report (debug = all)
+            'queue' => false,               // Send via queue (async)
+            'retries' => 0,                 // Retry attempts on failure
+            'throttle' => 1,               // Per-channel cooldown in seconds (0 = use global)
+            'log_channel' => 'slack',       // Laravel logging channel name
         ],
 
         'telegram' => [
             'enabled' => false,
             'auto_report_exceptions' => true,
+            'daily_digest' => true,
+            // Levels: debug, info, notice, warning, error, critical, alert, emergency
+            'min_level' => 'error',
+            'queue' => true,
+            'retries' => 2,
+            'throttle' => 10,
             'bot_token' => env('LOGMAN_TELEGRAM_BOT_TOKEN'),
             'chat_id' => env('LOGMAN_TELEGRAM_CHAT_ID'),
         ],
@@ -62,14 +88,26 @@ return [
         'discord' => [
             'enabled' => false,
             'auto_report_exceptions' => true,
+            'daily_digest' => true,
+            // Levels: debug, info, notice, warning, error, critical, alert, emergency
+            'min_level' => 'error',
+            'queue' => true,
+            'retries' => 2,
+            'throttle' => 10,
             'webhook_url' => env('LOGMAN_DISCORD_WEBHOOK'),
         ],
 
         'mail' => [
             'enabled' => false,
             'auto_report_exceptions' => true,
-            'to' => explode(',', env('LOGMAN_MAIL_TO', '')),  // array of emails
-            'from' => env('LOGMAN_MAIL_FROM'),                // null = use default mail.from
+            'daily_digest' => true,
+            // Levels: debug, info, notice, warning, error, critical, alert, emergency
+            'min_level' => 'error',
+            'queue' => true,
+            'retries' => 1,
+            'throttle' => 60,              // 60s cooldown per exception for email
+            'to' => explode(',', env('LOGMAN_MAIL_TO', '')),
+            'from' => env('LOGMAN_MAIL_FROM'),
         ],
 
     ],

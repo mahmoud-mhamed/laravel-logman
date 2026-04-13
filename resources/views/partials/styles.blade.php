@@ -70,10 +70,19 @@
     .badge-info { background: var(--info-bg); color: var(--info-text); }
     .badge-debug { background: var(--debug-bg); color: var(--debug-text); }
 
+    .nav-menu-btn { display: none; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; cursor: pointer; color: var(--text-muted); font-size: 14px; line-height: 1; transition: all 0.2s; }
+    .nav-menu-btn:hover { background: var(--hover); border-color: var(--primary); color: var(--primary); }
+    .nav-mobile-dropdown { display: none; position: absolute; top: 52px; left: 0; right: 0; background: var(--bg-card); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm); z-index: 20; padding: 8px; }
+    .nav-mobile-dropdown a { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.15s; }
+    .nav-mobile-dropdown a:hover { background: var(--hover); color: var(--text); }
+    .nav-mobile-dropdown a.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+    .nav-mobile-dropdown a svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
+    .nav-mobile-dropdown.open { display: block; }
+
     @media (max-width: 768px) {
         .top-nav { gap: 8px; padding: 0 12px; }
-        .nav-links { margin-left: 8px; }
-        .nav-links a { padding: 5px 10px; font-size: 12px; }
+        .nav-links { display: none; }
+        .nav-menu-btn { display: inline-flex; }
         .nav-env { display: none; }
     }
 </style>

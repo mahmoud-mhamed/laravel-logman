@@ -2,11 +2,13 @@
 
 namespace Mhamed\Logman;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\ServiceProvider;
 use Mhamed\Logman\Console\Commands\LogmanClearMutesCommand;
 use Mhamed\Logman\Console\Commands\LogmanDigestCommand;
+use Mhamed\Logman\Console\Commands\LogmanInstallCommand;
 use Mhamed\Logman\Console\Commands\LogmanListMutesCommand;
 use Mhamed\Logman\Console\Commands\LogmanMuteCommand;
 use Mhamed\Logman\Console\Commands\LogmanTestCommand;
@@ -49,6 +51,7 @@ class LogmanServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands([
+                LogmanInstallCommand::class,
                 LogmanTestCommand::class,
                 LogmanMuteCommand::class,
                 LogmanListMutesCommand::class,
@@ -62,6 +65,10 @@ class LogmanServiceProvider extends ServiceProvider
 
         if (config('logman.auto_report_exceptions')) {
             $this->registerExceptionReporting();
+        }
+
+        if (config('logman.daily_digest.enabled')) {
+            $this->registerDailyDigest();
         }
     }
 
@@ -96,6 +103,15 @@ class LogmanServiceProvider extends ServiceProvider
             $channelConfig = config('logman.slack_channel_config', []);
             config(["logging.channels.{$channelName}" => $channelConfig]);
         }
+    }
+
+    protected function registerDailyDigest(): void
+    {
+        $this->app->booted(function () {
+            $schedule = $this->app->make(Schedule::class);
+            $time = config('logman.daily_digest.time', '09:00');
+            $schedule->command('logman:digest')->dailyAt($time);
+        });
     }
 
     protected function registerExceptionReporting(): void
