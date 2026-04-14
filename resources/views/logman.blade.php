@@ -493,7 +493,7 @@
                                                         <button class="review-btn" onclick="openReviewModal('{{ $selectedFile }}', '{{ $entry['hash'] }}')" title="Mark as Reviewed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
                                                     @endif
                                                     @if(in_array($entry['level'], ['emergency','alert','critical','error','warning']))
-                                                        @php $muteClass = $entry['exception_class'] ?: ($entry['exception_message'] ?? $entry['message']); @endphp
+                                                        @php $muteClass = $entry['exception_class'] ?: \Illuminate\Support\Str::limit($entry['exception_message'] ?? $entry['message'], 250, ''); @endphp
                                                         <div style="position:relative;display:inline-block;">
                                                             @if(!empty($entry['is_muted']))
                                                                 <button class="mute-btn" style="color:var(--danger-text);border-color:var(--danger-border);background:var(--danger-bg);" onclick="toggleMuteDropdown(this)" title="Muted"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>

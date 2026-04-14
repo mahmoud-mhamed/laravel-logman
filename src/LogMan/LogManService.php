@@ -11,9 +11,13 @@ use SplFileInfo;
 class LogManService
 {
     protected string $storagePath;
+
     protected string $pattern;
+
     protected int $maxFileSize;
+
     protected int $perPage;
+
     protected string $cachePrefix;
 
     public function __construct()
@@ -30,15 +34,15 @@ class LogManService
 
     public function getFiles(): Collection
     {
-        if (!File::isDirectory($this->storagePath)) {
+        if (! File::isDirectory($this->storagePath)) {
             return collect();
         }
 
-        return collect(File::glob($this->storagePath . '/' . $this->pattern))
-            ->map(fn(string $path) => new SplFileInfo($path))
-            ->sortByDesc(fn(SplFileInfo $file) => $file->getMTime())
+        return collect(File::glob($this->storagePath.'/'.$this->pattern))
+            ->map(fn (string $path) => new SplFileInfo($path))
+            ->sortByDesc(fn (SplFileInfo $file) => $file->getMTime())
             ->values()
-            ->map(fn(SplFileInfo $file) => [
+            ->map(fn (SplFileInfo $file) => [
                 'name' => $file->getFilename(),
                 'path' => $file->getRealPath(),
                 'size' => $file->getSize(),
@@ -53,8 +57,10 @@ class LogManService
         $path = $this->safePath($filename);
         if ($path && File::exists($path)) {
             $this->clearFileCache($filename);
+
             return File::delete($path);
         }
+
         return false;
     }
 
@@ -66,6 +72,7 @@ class LogManService
                 $count++;
             }
         }
+
         return $count;
     }
 
@@ -74,44 +81,46 @@ class LogManService
         $path = $this->safePath($filename);
         if ($path && File::exists($path)) {
             $this->clearFileCache($filename);
+
             return File::put($path, '') !== false;
         }
+
         return false;
     }
 
     public function downloadPath(string $filename): ?string
     {
         $path = $this->safePath($filename);
+
         return ($path && File::exists($path)) ? $path : null;
     }
 
     // ─── Log Parsing ────────────────────────────────────────────
 
     public function getLogEntries(
-        string  $filename,
+        string $filename,
         ?string $level = null,
         ?string $search = null,
-        bool    $isRegex = false,
+        bool $isRegex = false,
         ?string $dateFrom = null,
         ?string $dateTo = null,
         ?string $timeFrom = null,
         ?string $timeTo = null,
-        string  $sortDirection = 'desc',
-        int     $page = 1,
-        ?int    $perPage = null,
+        string $sortDirection = 'desc',
+        int $page = 1,
+        ?int $perPage = null,
         ?string $reviewFilter = null,
         ?string $reviewStatus = null,
         ?string $muteFilter = null,
-        array   $activeMutes = [],
-        array   $activeThrottles = [],
+        array $activeMutes = [],
+        array $activeThrottles = [],
         ?string $bookmarkFilter = null,
-        array   $bookmarkedHashes = [],
-    ): array
-    {
+        array $bookmarkedHashes = [],
+    ): array {
         $perPage = $perPage ?? $this->perPage;
         $path = $this->safePath($filename);
 
-        if (!$path || !File::exists($path)) {
+        if (! $path || ! File::exists($path)) {
             return $this->emptyResult($perPage, $page);
         }
 
@@ -132,7 +141,7 @@ class LogManService
 
         // Apply filters
         if ($level && $level !== 'all') {
-            $entries = array_filter($entries, fn($e) => $e['level'] === strtolower($level));
+            $entries = array_filter($entries, fn ($e) => $e['level'] === strtolower($level));
         }
 
         if ($search) {
@@ -140,32 +149,32 @@ class LogManService
         }
 
         if ($dateFrom) {
-            $entries = array_filter($entries, fn($e) => substr($e['date'], 0, 10) >= $dateFrom);
+            $entries = array_filter($entries, fn ($e) => substr($e['date'], 0, 10) >= $dateFrom);
         }
 
         if ($dateTo) {
-            $entries = array_filter($entries, fn($e) => substr($e['date'], 0, 10) <= $dateTo);
+            $entries = array_filter($entries, fn ($e) => substr($e['date'], 0, 10) <= $dateTo);
         }
 
         if ($timeFrom) {
-            $entries = array_filter($entries, fn($e) => substr($e['date'], 11, 8) >= $timeFrom);
+            $entries = array_filter($entries, fn ($e) => substr($e['date'], 11, 8) >= $timeFrom);
         }
 
         if ($timeTo) {
-            $entries = array_filter($entries, fn($e) => substr($e['date'], 11, 8) <= $timeTo);
+            $entries = array_filter($entries, fn ($e) => substr($e['date'], 11, 8) <= $timeTo);
         }
 
         if ($reviewFilter === 'reviewed') {
-            $entries = array_filter($entries, fn($e) => !empty($e['reviewed']));
+            $entries = array_filter($entries, fn ($e) => ! empty($e['reviewed']));
             if ($reviewStatus) {
-                $entries = array_filter($entries, fn($e) => ($e['review_status'] ?? 'reviewed') === $reviewStatus);
+                $entries = array_filter($entries, fn ($e) => ($e['review_status'] ?? 'reviewed') === $reviewStatus);
             }
         } elseif ($reviewFilter === 'unreviewed') {
-            $entries = array_filter($entries, fn($e) => empty($e['reviewed']));
+            $entries = array_filter($entries, fn ($e) => empty($e['reviewed']));
         }
 
         // Mark muted entries
-        if (!empty($activeMutes)) {
+        if (! empty($activeMutes)) {
             foreach ($entries as &$entry) {
                 $muteInfo = $this->findEntryMute($entry, $activeMutes);
                 $entry['is_muted'] = $muteInfo !== null;
@@ -175,7 +184,7 @@ class LogManService
         }
 
         // Mark throttled entries
-        if (!empty($activeThrottles)) {
+        if (! empty($activeThrottles)) {
             foreach ($entries as &$entry) {
                 $throttleInfo = $this->findEntryThrottle($entry, $activeThrottles);
                 $entry['is_throttled'] = $throttleInfo !== null;
@@ -185,18 +194,18 @@ class LogManService
         }
 
         if ($muteFilter === 'muted') {
-            $entries = array_filter($entries, fn($e) => !empty($e['is_muted']));
+            $entries = array_filter($entries, fn ($e) => ! empty($e['is_muted']));
         } elseif ($muteFilter === 'unmuted') {
-            $entries = array_filter($entries, fn($e) => empty($e['is_muted']));
+            $entries = array_filter($entries, fn ($e) => empty($e['is_muted']));
         }
 
         // Bookmark filter
-        if ($bookmarkFilter === 'bookmarked' && !empty($bookmarkedHashes)) {
+        if ($bookmarkFilter === 'bookmarked' && ! empty($bookmarkedHashes)) {
             $bmSet = array_flip($bookmarkedHashes);
-            $entries = array_filter($entries, fn($e) => isset($bmSet[$e['hash']]));
+            $entries = array_filter($entries, fn ($e) => isset($bmSet[$e['hash']]));
         } elseif ($bookmarkFilter === 'not_bookmarked') {
             $bmSet = array_flip($bookmarkedHashes);
-            $entries = array_filter($entries, fn($e) => !isset($bmSet[$e['hash']]));
+            $entries = array_filter($entries, fn ($e) => ! isset($bmSet[$e['hash']]));
         }
 
         $entries = array_values($entries);
@@ -228,13 +237,17 @@ class LogManService
 
     protected function hasMultipleDates(array $entries): bool
     {
-        if (count($entries) < 2) return false;
+        if (count($entries) < 2) {
+            return false;
+        }
 
         $dates = [];
         foreach ($entries as $entry) {
             $date = substr($entry['date'], 0, 10);
             $dates[$date] = true;
-            if (count($dates) > 1) return true;
+            if (count($dates) > 1) {
+                return true;
+            }
         }
 
         return false;
@@ -243,7 +256,7 @@ class LogManService
     protected function getCachedEntries(string $filename, string $path): array
     {
         $mtime = File::lastModified($path);
-        $cacheKey = $this->cachePrefix . md5($filename . $mtime);
+        $cacheKey = $this->cachePrefix.md5($filename.$mtime);
 
         return Cache::remember($cacheKey, 300, function () use ($path) {
             return $this->parseLogFile($path);
@@ -255,7 +268,7 @@ class LogManService
         $path = $this->safePath($filename);
         if ($path && File::exists($path)) {
             $mtime = File::lastModified($path);
-            Cache::forget($this->cachePrefix . md5($filename . $mtime));
+            Cache::forget($this->cachePrefix.md5($filename.$mtime));
         }
     }
 
@@ -276,7 +289,7 @@ class LogManService
         $currentEntry = null;
 
         $handle = fopen($path, 'r');
-        if (!$handle) {
+        if (! $handle) {
             return [];
         }
 
@@ -309,7 +322,7 @@ class LogManService
                     'review_at' => '',
                 ];
             } elseif ($currentEntry !== null) {
-                $currentEntry['stack'] .= $line . "\n";
+                $currentEntry['stack'] .= $line."\n";
             }
         }
 
@@ -327,7 +340,7 @@ class LogManService
 
     protected function finalizeEntry(array &$entry): void
     {
-        $entry['hash'] = md5($entry['date'] . '|' . $entry['level'] . '|' . $entry['message']);
+        $entry['hash'] = md5($entry['date'].'|'.$entry['level'].'|'.$entry['message']);
         $entry['stack'] = trim($entry['stack']);
 
         // Extract JSON context from stack trace
@@ -347,6 +360,7 @@ class LogManService
 
         // Extract exception class from stack trace (e.g. [stacktrace] or first line with namespace\Class)
         $entry['exception_class'] = '';
+        $combined = $entry['message']."\n".$entry['stack'];
         if ($entry['stack']) {
             // Look for patterns like "Namespace\ClassName:" or common exception class patterns
             if (preg_match('/^([A-Z][a-zA-Z0-9_\\\\]+(?:Exception|Error|Fault))/m', $entry['stack'], $cm)) {
@@ -355,9 +369,22 @@ class LogManService
                 $entry['exception_class'] = $cm[1];
             }
         }
+        // Fallback: Laravel serialized format e.g. "(DivisionByZeroError(code:" or "(App\Exceptions\CustomError(code:"
+        if (empty($entry['exception_class']) && preg_match('/\(([A-Z][a-zA-Z0-9_\\\\]*(?:Exception|Error|Fault))\(/', $combined, $cm)) {
+            $entry['exception_class'] = $cm[1];
+        }
         // Fallback: try extracting from message itself
         if (empty($entry['exception_class']) && preg_match('/^([A-Z][a-zA-Z0-9_\\\\]*(?:Exception|Error))/', $entry['message'], $cm)) {
             $entry['exception_class'] = $cm[1];
+        }
+        // Fallback: extract message text before first JSON object as a stable identifier
+        // e.g. "Unifonic API error {"message_id":123,...}" → "Unifonic API error"
+        if (empty($entry['exception_class'])) {
+            $cleanMsg = preg_replace('/\s*\{.*$/s', '', $entry['message']);
+            $cleanMsg = rtrim($cleanMsg, ': |');
+            if (! empty($cleanMsg) && $cleanMsg !== $entry['message']) {
+                $entry['exception_class'] = $cleanMsg;
+            }
         }
     }
 
@@ -365,18 +392,20 @@ class LogManService
     {
         if ($isRegex) {
             // Use \x01 as delimiter to prevent delimiter injection
-            $pattern = "\x01" . $search . "\x01iu";
+            $pattern = "\x01".$search."\x01iu";
             $regexValid = @preg_match($pattern, '') !== false;
             if ($regexValid) {
                 $oldLimit = ini_get('pcre.backtrack_limit');
                 ini_set('pcre.backtrack_limit', 10000);
 
                 $filtered = array_filter($entries, function ($entry) use ($pattern) {
-                    $text = $entry['message'] . ' ' . $entry['stack'];
+                    $text = $entry['message'].' '.$entry['stack'];
+
                     return @preg_match($pattern, $text) === 1;
                 });
 
                 ini_set('pcre.backtrack_limit', $oldLimit);
+
                 return $filtered;
             }
         }
@@ -385,12 +414,13 @@ class LogManService
         $terms = array_filter(explode(' ', $search));
 
         return array_filter($entries, function ($entry) use ($terms) {
-            $text = mb_strtolower($entry['message'] . ' ' . $entry['stack'] . ' ' . $entry['env']);
+            $text = mb_strtolower($entry['message'].' '.$entry['stack'].' '.$entry['env']);
             foreach ($terms as $term) {
-                if (!str_contains($text, $term)) {
+                if (! str_contains($text, $term)) {
                     return false;
                 }
             }
+
             return true;
         });
     }
@@ -413,7 +443,7 @@ class LogManService
         // Single loop: collect global stats + today/yesterday in one pass
         foreach ($files as $file) {
             $path = $this->safePath($file['name']);
-            if (!$path || !File::exists($path) || File::size($path) > $this->maxFileSize) {
+            if (! $path || ! File::exists($path) || File::size($path) > $this->maxFileSize) {
                 continue;
             }
 
@@ -465,7 +495,7 @@ class LogManService
             'global_counts' => $globalCounts,
             'per_file_counts' => $perFileCounts,
             'percentages' => $totalEntries > 0
-                ? array_map(fn($c) => round(($c / $totalEntries) * 100, 1), $globalCounts)
+                ? array_map(fn ($c) => round(($c / $totalEntries) * 100, 1), $globalCounts)
                 : [],
             'chart_data' => $this->buildChartData($globalCounts),
             'today_counts' => $todayCounts,
@@ -515,6 +545,7 @@ class LogManService
         }
         $pct = round((($current - $previous) / $previous) * 100);
         $direction = $pct > 0 ? 'up' : ($pct < 0 ? 'down' : 'same');
+
         return ['pct' => abs($pct), 'direction' => $direction, 'previous' => $previous];
     }
 
@@ -527,6 +558,7 @@ class LogManService
             $l = $entry['level'];
             $counts[$l] = ($counts[$l] ?? 0) + 1;
         }
+
         return $counts;
     }
 
@@ -545,7 +577,7 @@ class LogManService
     protected function safePath(string $filename): ?string
     {
         $filename = basename($filename);
-        $path = $this->storagePath . '/' . $filename;
+        $path = $this->storagePath.'/'.$filename;
 
         // Prevent directory traversal
         $realPath = realpath($path);
@@ -556,8 +588,8 @@ class LogManService
         }
 
         // File might not exist yet (for checking before create)
-        if (!$realPath && $realStorage) {
-            return $realStorage . '/' . $filename;
+        if (! $realPath && $realStorage) {
+            return $realStorage.'/'.$filename;
         }
 
         return null;
@@ -565,20 +597,31 @@ class LogManService
 
     protected function formatBytes(int $bytes): string
     {
-        if ($bytes === 0) return '0 B';
+        if ($bytes === 0) {
+            return '0 B';
+        }
         $units = ['B', 'KB', 'MB', 'GB'];
         $i = (int) floor(log($bytes, 1024));
-        return round($bytes / pow(1024, $i), 2) . ' ' . $units[$i];
+
+        return round($bytes / pow(1024, $i), 2).' '.$units[$i];
     }
 
     protected function timeAgo(int $timestamp): string
     {
         $diff = time() - $timestamp;
 
-        if ($diff < 60) return 'just now';
-        if ($diff < 3600) return (int) ($diff / 60) . 'm ago';
-        if ($diff < 86400) return (int) ($diff / 3600) . 'h ago';
-        if ($diff < 604800) return (int) ($diff / 86400) . 'd ago';
+        if ($diff < 60) {
+            return 'just now';
+        }
+        if ($diff < 3600) {
+            return (int) ($diff / 60).'m ago';
+        }
+        if ($diff < 86400) {
+            return (int) ($diff / 3600).'h ago';
+        }
+        if ($diff < 604800) {
+            return (int) ($diff / 86400).'d ago';
+        }
 
         return date('M j', $timestamp);
     }
@@ -589,15 +632,16 @@ class LogManService
 
     protected function getReviewsPath(): string
     {
-        return config('logman.storage_path', storage_path('logman')) . '/reviews.json';
+        return config('logman.storage_path', storage_path('logman')).'/reviews.json';
     }
 
     protected function loadReviews(): array
     {
         $path = $this->getReviewsPath();
-        if (!File::exists($path)) {
+        if (! File::exists($path)) {
             return [];
         }
+
         return json_decode(File::get($path), true) ?: [];
     }
 
@@ -605,16 +649,17 @@ class LogManService
     {
         $path = $this->getReviewsPath();
         $dir = dirname($path);
-        if (!File::isDirectory($dir)) {
+        if (! File::isDirectory($dir)) {
             File::makeDirectory($dir, 0755, true);
         }
 
         $json = json_encode($reviews, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $tmpPath = $path . '.tmp.' . getmypid();
+        $tmpPath = $path.'.tmp.'.getmypid();
         if (file_put_contents($tmpPath, $json, LOCK_EX) !== false) {
             return rename($tmpPath, $path);
         }
         @unlink($tmpPath);
+
         return false;
     }
 
@@ -629,7 +674,7 @@ class LogManService
         }
 
         foreach ($entries as &$entry) {
-            $key = $filename . ':' . $entry['hash'];
+            $key = $filename.':'.$entry['hash'];
             if (isset($reviews[$key])) {
                 $r = $reviews[$key];
                 $entry['reviewed'] = true;
@@ -645,7 +690,7 @@ class LogManService
     public function addReview(string $filename, string $hash, string $status = 'reviewed', string $note = '', ?string $by = null): bool
     {
         $reviews = $this->loadReviews();
-        $key = $filename . ':' . $hash;
+        $key = $filename.':'.$hash;
 
         $reviews[$key] = [
             'status' => $status,
@@ -655,20 +700,22 @@ class LogManService
         ];
 
         $this->clearFileCache($filename);
+
         return $this->saveReviews($reviews);
     }
 
     public function removeReview(string $filename, string $hash): bool
     {
         $reviews = $this->loadReviews();
-        $key = $filename . ':' . $hash;
+        $key = $filename.':'.$hash;
 
-        if (!isset($reviews[$key])) {
+        if (! isset($reviews[$key])) {
             return false;
         }
 
         unset($reviews[$key]);
         $this->clearFileCache($filename);
+
         return $this->saveReviews($reviews);
     }
 
@@ -677,7 +724,7 @@ class LogManService
     public function getGroupedEntries(string $filename): array
     {
         $path = $this->safePath($filename);
-        if (!$path || !File::exists($path) || File::size($path) > $this->maxFileSize) {
+        if (! $path || ! File::exists($path) || File::size($path) > $this->maxFileSize) {
             return [];
         }
 
@@ -686,14 +733,14 @@ class LogManService
 
         foreach ($entries as $entry) {
             // Group by: exception class + file + line (from message)
-            $groupKey = $entry['level'] . '|' . ($entry['exception_message'] ?? $entry['message']);
+            $groupKey = $entry['level'].'|'.($entry['exception_message'] ?? $entry['message']);
             if (isset($entry['exception_file'], $entry['exception_line'])) {
-                $groupKey .= '|' . $entry['exception_file'] . ':' . $entry['exception_line'];
+                $groupKey .= '|'.$entry['exception_file'].':'.$entry['exception_line'];
             }
 
             $key = md5($groupKey);
 
-            if (!isset($groups[$key])) {
+            if (! isset($groups[$key])) {
                 $groups[$key] = [
                     'message' => $entry['exception_message'] ?? $entry['message'],
                     'level' => $entry['level'],
@@ -716,7 +763,7 @@ class LogManService
         }
 
         // Sort by count descending
-        usort($groups, fn($a, $b) => $b['count'] - $a['count']);
+        usort($groups, fn ($a, $b) => $b['count'] - $a['count']);
 
         return $groups;
     }
@@ -731,7 +778,8 @@ class LogManService
         foreach ($mutes as $mute) {
             $classMatch = $mute['exception_class'] === $entryClass
                 || $mute['exception_class'] === $entryMessage
-                || str_contains($entryMessage, $mute['exception_class']);
+                || str_contains($entryMessage, $mute['exception_class'])
+                || (! empty($entryClass) && str_contains($mute['exception_class'], $entryClass));
 
             $patternMatch = empty($mute['message_pattern'])
                 || str_contains($entryMessage, $mute['message_pattern']);
@@ -752,7 +800,8 @@ class LogManService
         foreach ($throttles as $throttle) {
             $classMatch = $throttle['exception_class'] === $entryClass
                 || $throttle['exception_class'] === $entryMessage
-                || str_contains($entryMessage, $throttle['exception_class']);
+                || str_contains($entryMessage, $throttle['exception_class'])
+                || (! empty($entryClass) && str_contains($throttle['exception_class'], $entryClass));
 
             $patternMatch = empty($throttle['message_pattern'])
                 || str_contains($entryMessage, $throttle['message_pattern']);
@@ -768,7 +817,7 @@ class LogManService
     public function findEntryByHash(string $filename, string $hash): ?array
     {
         $path = $this->safePath($filename);
-        if (!$path || !File::exists($path) || File::size($path) > $this->maxFileSize) {
+        if (! $path || ! File::exists($path) || File::size($path) > $this->maxFileSize) {
             return null;
         }
 
@@ -789,7 +838,7 @@ class LogManService
 
     protected function getBookmarksPath(): string
     {
-        return config('logman.storage_path', storage_path('logman')) . '/bookmarks.json';
+        return config('logman.storage_path', storage_path('logman')).'/bookmarks.json';
     }
 
     public function getBookmarks(): array
@@ -799,12 +848,14 @@ class LogManService
         }
 
         $path = $this->getBookmarksPath();
-        if (!File::exists($path)) {
+        if (! File::exists($path)) {
             $this->cachedBookmarks = [];
+
             return [];
         }
 
         $this->cachedBookmarks = json_decode(File::get($path), true) ?: [];
+
         return $this->cachedBookmarks;
     }
 
@@ -822,7 +873,7 @@ class LogManService
         }
 
         $bookmarks[] = [
-            'id' => md5($file . $hash . microtime()),
+            'id' => md5($file.$hash.microtime()),
             'file' => $file,
             'hash' => $hash,
             'level' => $entry['level'],
@@ -844,7 +895,7 @@ class LogManService
     public function removeBookmark(string $id): void
     {
         $bookmarks = $this->getBookmarks();
-        $bookmarks = array_values(array_filter($bookmarks, fn($b) => $b['id'] !== $id));
+        $bookmarks = array_values(array_filter($bookmarks, fn ($b) => $b['id'] !== $id));
         $this->saveBookmarks($bookmarks);
     }
 
@@ -856,7 +907,7 @@ class LogManService
     protected function saveBookmarks(array $bookmarks): void
     {
         $storagePath = dirname($this->getBookmarksPath());
-        if (!File::isDirectory($storagePath)) {
+        if (! File::isDirectory($storagePath)) {
             File::makeDirectory($storagePath, 0755, true);
         }
 
