@@ -7,6 +7,11 @@ Route::group([
     'prefix' => config('logman.viewer.route_prefix', 'logman'),
     'middleware' => 'logman',
 ], function () {
+    // Authentication
+    Route::get('/login', [LogManController::class, 'login'])->name('logman.login');
+    Route::post('/login', [LogManController::class, 'authenticate'])->name('logman.login.submit');
+    Route::post('/logout', [LogManController::class, 'logout'])->name('logman.logout');
+
     Route::get('/', [LogManController::class, 'index'])->name('logman.index');
     Route::get('/analysis', [LogManController::class, 'dashboard'])->name('logman.dashboard');
     Route::get('/download', [LogManController::class, 'download'])->name('logman.download');

@@ -180,6 +180,11 @@ return [
         // Enable or disable the log viewer routes
         'enabled' => env('LOGMAN_VIEWER_ENABLED', true),
 
+        // Simple password protection for the log viewer.
+        // Set a password to require authentication before accessing Logman.
+        // Leave null to disable password protection.
+        'password' => env('LOGMAN_PASSWORD', null),
+
         // URL prefix (e.g. /logman)
         'route_prefix' => 'logman',
 

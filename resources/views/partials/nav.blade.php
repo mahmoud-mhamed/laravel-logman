@@ -48,6 +48,14 @@
         <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
             <span id="theme-icon"></span>
         </button>
+        @if(config('logman.viewer.password'))
+            <form method="POST" action="{{ route('logman.logout') }}" style="margin:0;">
+                @csrf
+                <button type="submit" class="theme-toggle" title="Logout">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </button>
+            </form>
+        @endif
     </div>
 </nav>
 
@@ -85,6 +93,15 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
         About
     </a>
+    @if(config('logman.viewer.password'))
+        <form method="POST" action="{{ route('logman.logout') }}" style="margin:0;">
+            @csrf
+            <button type="submit" style="width:100;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;color:var(--danger-text);text-decoration:none;transition:all 0.15s;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Logout
+            </button>
+        </form>
+    @endif
 </div>
 
 <script>

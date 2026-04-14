@@ -17,6 +17,63 @@ class LogManController extends Controller
         $this->viewer = $viewer;
     }
 
+    public function login()
+    {
+        $password = config('logman.viewer.password');
+
+        // If no password set or already authenticated, go to index
+        if ($password === null || $password === '' || session('logman_authenticated')) {
+            return redirect()->route('logman.index');
+        }
+
+        return view('logman::login');
+    }
+
+    public function authenticate(Request $request)
+    {
+        $maxAttempts = 5;
+        $decaySeconds = 60;
+        $throttleKey = 'logman-login|' . $request->ip();
+
+        $limiter = app(\Illuminate\Cache\RateLimiter::class);
+
+        if ($limiter->tooManyAttempts($throttleKey, $maxAttempts)) {
+            $seconds = $limiter->availableIn($throttleKey);
+            return back()->withErrors([
+                'password' => __('Too many login attempts. Please try again in :seconds seconds.', ['seconds' => $seconds]),
+            ]);
+        }
+
+        $password = config('logman.viewer.password');
+
+        if ($password !== null && hash_equals((string) $password, (string) $request->input('password'))) {
+            $limiter->clear($throttleKey);
+            $request->session()->put('logman_authenticated', true);
+            return redirect()->route('logman.index');
+        }
+
+        $limiter->hit($throttleKey, $decaySeconds);
+
+        $remaining = $maxAttempts - $limiter->attempts($throttleKey);
+
+        return back()->withErrors([
+            'password' => trans_choice(
+                '{0} Invalid password. No attempts remaining. Please wait :seconds seconds.|{1} Invalid password. :remaining attempt remaining.|[2,*] Invalid password. :remaining attempts remaining.',
+                $remaining,
+                [
+                    'remaining' => $remaining,
+                    'seconds' => $decaySeconds,
+                ]
+            ),
+        ]);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->session()->forget('logman_authenticated');
+        return redirect()->route('logman.login');
+    }
+
     public function dashboard()
     {
         $stats = $this->viewer->getDashboardStats();
