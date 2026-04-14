@@ -78,7 +78,22 @@ This will:
 - Create the storage directory (`storage/logman`) with `.gitignore`
 - Add all required env variables to `.env` and `.env.example`
 
-> Use `--force` to overwrite an existing config file.
+> Use `--force` to overwrite an existing config file with the latest version.
+
+#### Updating config after a package update
+
+When Logman adds new config options in a new version, you can add them automatically:
+
+```bash
+php artisan logman:install --sync
+```
+
+This will compare your `config/logman.php` with the package default and **insert any missing keys** — with their default values, comments, and original formatting preserved. Your existing values stay untouched.
+
+| Flag | Description |
+|---|---|
+| `--force` | Overwrite the entire config file with the latest package default |
+| `--sync` | Add missing config keys with their defaults (preserves your existing values and formatting) |
 
 ---
 
@@ -104,6 +119,18 @@ Publish the config file:
 
 ```bash
 php artisan vendor:publish --tag=logman-config
+```
+
+To overwrite an existing config with the latest defaults:
+
+```bash
+php artisan vendor:publish --tag=logman-config --force
+```
+
+To add missing config keys after a package update (preserves your existing values):
+
+```bash
+php artisan logman:install --sync
 ```
 
 Publish the views (optional):
@@ -464,6 +491,8 @@ Then add it to your config:
 | Command | Description |
 |---|---|
 | `logman:install` | Publish config, create storage directory, add env variables |
+| `logman:install --force` | Overwrite existing config with the package default |
+| `logman:install --sync` | Add missing config keys while preserving existing values and formatting |
 | `logman:test` | Send a test notification to all enabled channels |
 | `logman:mute "ClassName" --duration=1d` | Mute an exception from CLI |
 | `logman:list-mutes` | List all active mutes |
