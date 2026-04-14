@@ -1,15 +1,19 @@
-{{-- Entry detail expandable row. Expects: $entry, $i, $search (optional), $isRegex (optional) --}}
+{{-- Entry detail expandable row. Expects: $entry, $i, $search (optional), $isRegex (optional), $hasLongMessage (optional), $hasStackOrContext (optional) --}}
 @php
     $search = $search ?? '';
     $isRegex = $isRegex ?? false;
+    $hasLongMessage = $hasLongMessage ?? false;
+    $hasStackOrContext = $hasStackOrContext ?? ($entry['stack'] || $entry['context']);
+    $messageIsFirstTab = $hasLongMessage && !$hasStackOrContext;
 @endphp
 <div class="detail-content">
     <div class="detail-tabs">
+        <button class="detail-tab {{ $messageIsFirstTab ? 'active' : '' }}" onclick="showPane({{ $i }}, 'message', this)">Message</button>
         @if($entry['stack'])
-            <button class="detail-tab active" onclick="showPane({{ $i }}, 'stack', this)">Stack Trace</button>
+            <button class="detail-tab {{ !$messageIsFirstTab ? 'active' : '' }}" onclick="showPane({{ $i }}, 'stack', this)">Stack Trace</button>
         @endif
         @if($entry['context'])
-            <button class="detail-tab {{ !$entry['stack'] ? 'active' : '' }}" onclick="showPane({{ $i }}, 'context', this)">Context</button>
+            <button class="detail-tab {{ !$entry['stack'] && !$messageIsFirstTab ? 'active' : '' }}" onclick="showPane({{ $i }}, 'context', this)">Context</button>
         @endif
         <button class="detail-tab" onclick="showPane({{ $i }}, 'raw', this)">Raw</button>
     </div>
@@ -21,14 +25,18 @@
             <button onclick="detailSearchNav({{ $i }}, 1)" title="Next">{!! '&#8595;' !!}</button>
         </div>
     </div>
+    <div class="detail-pane {{ $messageIsFirstTab ? 'active' : '' }} detail-pane-wrap" id="pane-{{ $i }}-message">
+        <button class="copy-btn" onclick="copyText(this, {{ $i }}, 'message')">Copy</button>
+        <div class="context-content">{!! $search ? highlightSearch(e($entry['message']), $search, $isRegex) : e($entry['message']) !!}</div>
+    </div>
     @if($entry['stack'])
-        <div class="detail-pane active detail-pane-wrap" id="pane-{{ $i }}-stack">
+        <div class="detail-pane {{ !$messageIsFirstTab ? 'active' : '' }} detail-pane-wrap" id="pane-{{ $i }}-stack">
             <button class="copy-btn" onclick="copyText(this, {{ $i }}, 'stack')">Copy</button>
             <div class="stack-content">{!! $search ? highlightSearch(e($entry['stack']), $search, $isRegex) : e($entry['stack']) !!}</div>
         </div>
     @endif
     @if($entry['context'])
-        <div class="detail-pane {{ !$entry['stack'] ? 'active' : '' }} detail-pane-wrap" id="pane-{{ $i }}-context">
+        <div class="detail-pane {{ !$entry['stack'] && !$messageIsFirstTab ? 'active' : '' }} detail-pane-wrap" id="pane-{{ $i }}-context">
             <button class="copy-btn" onclick="copyText(this, {{ $i }}, 'context')">Copy</button>
             <div class="context-content">{!! $search ? highlightSearch(e($entry['context']), $search, $isRegex) : e($entry['context']) !!}</div>
         </div>

@@ -96,7 +96,12 @@
         .log-row.level-debug td:first-child { box-shadow: inset 3px 0 0 var(--debug-text); }
         .date-col { white-space: nowrap; font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
         .env-col { font-size: 12px; color: var(--text-muted); font-weight: 500; }
-        .message-col { font-size: 13px; max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .message-col { font-size: 13px; max-width: 0; overflow: hidden; white-space: nowrap; }
+        .message-col-inner { display: flex; align-items: center; gap: 6px; overflow: hidden; }
+        .message-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+        .message-badges { display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto; }
+        .copy-msg-btn { flex-shrink: 0; padding: 1px 6px; font-size: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-light); cursor: pointer; font-weight: 500; transition: all 0.2s; line-height: 1.4; }
+        .copy-msg-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
         .expand-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; transition: transform 0.2s ease; color: var(--text-light); font-size: 8px; border-radius: 4px; }
         .log-row:hover .expand-icon { background: var(--primary-light); color: var(--primary); }
         .log-row.open .expand-icon { transform: rotate(90deg); background: var(--primary-light); color: var(--primary); }
@@ -424,28 +429,39 @@
                                 </thead>
                                 <tbody>
                                     @foreach($entries as $i => $entry)
-                                        @php $hasDetails = $entry['stack'] || $entry['context']; @endphp
+                                        @php
+                                            $hasStackOrContext = $entry['stack'] || $entry['context'];
+                                            $hasLongMessage = mb_strlen($entry['message']) > 150;
+                                            $hasDetails = $hasStackOrContext || $hasLongMessage;
+                                        @endphp
                                         <tr class="log-row level-{{ $entry['level_class'] }} {{ !$hasDetails ? 'no-details' : '' }} {{ !empty($entry['is_muted']) ? 'is-muted' : '' }}" @if($hasDetails) onclick="toggleDetail({{ $i }}, this)" @endif data-index="{{ $i }}">
                                             <td>@if($hasDetails)<span class="expand-icon">&#9654;</span>@endif</td>
                                             <td><span class="badge badge-{{ $entry['level_class'] }}">{{ $entry['level'] }}</span></td>
                                             <td class="env-col">{{ $entry['env'] }}</td>
                                             <td class="date-col">{{ $entry['date'] }}</td>
                                             <td class="message-col">
-                                                {!! $search ? highlightSearch(e($entry['message']), $search, $isRegex) : e($entry['message']) !!}
-                                                @if(!empty($entry['reviewed']))
-                                                    <span class="review-indicator">
-                                                        &#10003; {{ ucfirst($entry['review_status'] ?? 'reviewed') }}
+                                                <div class="message-col-inner">
+                                                    <span class="message-text">
+                                                        {!! $search ? highlightSearch(e($entry['message']), $search, $isRegex) : e($entry['message']) !!}
+                                                        @if(!empty($entry['review_note']))
+                                                            <span class="review-note-text">{{ $entry['review_note'] }}</span>
+                                                        @endif
                                                     </span>
-                                                @endif
-                                                @if(!empty($entry['review_note']))
-                                                    <div class="review-note-text">{{ $entry['review_note'] }}</div>
-                                                @endif
-                                                @if(!empty($entry['is_muted']))
-                                                    <span class="muted-indicator"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg> Muted</span>
-                                                @endif
-                                                @if(!empty($entry['is_throttled']))
-                                                    <span class="review-indicator" style="color:var(--info-text);"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {{ $entry['throttle_info']['current_hits'] }}/{{ $entry['throttle_info']['max_hits'] }}</span>
-                                                @endif
+                                                    <span class="message-badges">
+                                                        @if(!empty($entry['reviewed']))
+                                                            <span class="review-indicator">
+                                                                &#10003; {{ ucfirst($entry['review_status'] ?? 'reviewed') }}
+                                                            </span>
+                                                        @endif
+                                                        @if(!empty($entry['is_muted']))
+                                                            <span class="muted-indicator"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg> Muted</span>
+                                                        @endif
+                                                        @if(!empty($entry['is_throttled']))
+                                                            <span class="review-indicator" style="color:var(--info-text);"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {{ $entry['throttle_info']['current_hits'] }}/{{ $entry['throttle_info']['max_hits'] }}</span>
+                                                        @endif
+                                                        <button class="copy-msg-btn" onclick="event.stopPropagation(); copyMessage(this, '{{ addslashes(e($entry['message'])) }}')" title="Copy message">Copy</button>
+                                                    </span>
+                                                </div>
                                             </td>
                                             <td onclick="event.stopPropagation()">
                                                 <div class="review-actions">
@@ -567,7 +583,7 @@
                                         @if($hasDetails)
                                             <tr class="detail-row" id="detail-{{ $i }}">
                                                 <td colspan="6">
-                                                    @include('logman::partials._entry-detail', ['entry' => $entry, 'i' => $i, 'search' => $search, 'isRegex' => $isRegex])
+                                                    @include('logman::partials._entry-detail', ['entry' => $entry, 'i' => $i, 'search' => $search, 'isRegex' => $isRegex, 'hasLongMessage' => $hasLongMessage, 'hasStackOrContext' => $hasStackOrContext])
                                                 </td>
                                             </tr>
                                         @endif
@@ -943,6 +959,23 @@ function submitUnreview() {
 
 function closeReviewModal() {
     document.getElementById('reviewModal').classList.remove('open');
+}
+
+// ─── Copy Message ──────────────────────────────────────────
+function copyMessage(btn, text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => showCopiedMsg(btn));
+    } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta); showCopiedMsg(btn);
+    }
+}
+function showCopiedMsg(btn) {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!'; btn.style.background = 'var(--success-bg)'; btn.style.color = 'var(--success-text)'; btn.style.borderColor = 'var(--debug-border)';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 1500);
 }
 
 // ─── Mute Dropdown ─────────────────────────────────────────
