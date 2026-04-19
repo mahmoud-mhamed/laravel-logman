@@ -196,7 +196,7 @@ return [
         // Set to null to allow access only in local environment.
         // To allow all access, use: fn () => true
         // Example: fn ($request) => $request->user()?->isAdmin()
-        'authorize' => fn() => true,
+        'authorize' => true,
 
         // Path to the log files directory
         'storage_path' => storage_path('logs'),
