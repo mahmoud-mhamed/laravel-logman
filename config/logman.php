@@ -194,7 +194,7 @@ return [
 
         // Authorization callback — return true to allow access, false to deny.
         // Set to null to allow access only in local environment.
-        // To allow all access, use: fn () => true
+        // To allow all access, use: true or fn () => true
         // Example: fn ($request) => $request->user()?->isAdmin()
         'authorize' => true,
 
