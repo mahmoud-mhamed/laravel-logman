@@ -17,7 +17,9 @@ class MailChannel implements ChannelInterface
                 return;
             }
 
-            $subject = "🚨 [{$payload['app']}] Exception in {$payload['env']}: " .
+            $branch = $payload['environment']['git_branch'] ?? '-';
+            $subject = "🚨 [{$payload['app']}] Exception in {$payload['env']}" .
+                ($branch !== '-' ? " ({$branch})" : '') . ': ' .
                 mb_substr($payload['exception']['class'], 0, 80);
 
             Mail::raw($this->formatException($payload), function ($msg) use ($to, $from, $subject) {
@@ -143,6 +145,7 @@ class MailChannel implements ChannelInterface
         $lines[] = "Laravel:    {$env['laravel']}";
         $lines[] = "Memory:     {$env['memory']}";
         $lines[] = "Server:     {$env['hostname']}";
+        $lines[] = "Git Branch: {$env['git_branch']}";
         $lines[] = "Git Commit: {$env['git_commit']}";
         if (!empty($env['app_url'])) {
             $lines[] = "App URL:    {$env['app_url']}";

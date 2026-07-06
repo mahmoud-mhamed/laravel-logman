@@ -15,9 +15,11 @@ function showPane(index, pane, tab) {
 }
 
 function copyText(btn, index, pane) {
-    const el = document.querySelector('#pane-' + index + '-' + pane + ' .stack-content, #pane-' + index + '-' + pane + ' .context-content');
-    if (!el) return;
-    const text = el.textContent;
+    const paneEl = document.getElementById('pane-' + index + '-' + pane);
+    if (!paneEl) return;
+    const els = paneEl.querySelectorAll('.stack-content, .context-content, .json-content');
+    if (!els.length) return;
+    const text = Array.from(els).map(e => e.dataset.raw ?? e.textContent).join('\n\n');
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(() => showCopied(btn));
     } else {
@@ -72,3 +74,5 @@ function detailSearchNav(index, direction) {
 
 function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
 function escapeRegex(str) { return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+@include('logman::partials._json-viewer')

@@ -104,6 +104,7 @@ class LogManController extends Controller
 
         $muteFilter = $request->get('mute_filter') ?: null;
         $bookmarkFilter = $request->get('bookmark_filter') ?: null;
+        $unique = $request->boolean('unique');
 
         $muteService = app(MuteService::class);
         $activeMutes = $muteService->getMutes();
@@ -120,6 +121,7 @@ class LogManController extends Controller
                 $sortDirection, $page, $perPage, $reviewFilter, $reviewStatus,
                 $muteFilter, $activeMutes, $activeThrottles,
                 $bookmarkFilter, $bookmarkedHashList,
+                $unique,
             );
         }
 
@@ -145,6 +147,7 @@ class LogManController extends Controller
             'sortDirection' => $sortDirection,
             'reviewFilter' => $reviewFilter,
             'muteFilter' => $muteFilter,
+            'unique' => $unique,
             'perPage' => $perPage,
             'levelCounts' => $logData['level_counts'],
             'hasMultipleDates' => $logData['has_multiple_dates'],
@@ -541,6 +544,7 @@ class LogManController extends Controller
                 'memory' => '-',
                 'hostname' => gethostname() ?: '-',
                 'git_commit' => '-',
+                'git_branch' => '-',
                 'app_url' => config('app.url'),
             ],
         ];

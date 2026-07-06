@@ -116,6 +116,7 @@ class LogManService
         array $activeThrottles = [],
         ?string $bookmarkFilter = null,
         array $bookmarkedHashes = [],
+        bool $unique = false,
     ): array {
         $perPage = $perPage ?? $this->perPage;
         $path = $this->safePath($filename);
@@ -210,6 +211,12 @@ class LogManService
 
         $entries = array_values($entries);
 
+        // Collapse duplicate log entries (same level + message) into a single
+        // row with an occurrence count. Keeps the most recent occurrence.
+        if ($unique) {
+            $entries = $this->uniqueEntries($entries);
+        }
+
         // Paginate — entries are stored oldest-first (chronological).
         // For desc (newest first), slice from the end to avoid reversing the full array.
         $total = count($entries);
@@ -233,6 +240,35 @@ class LogManService
             'level_counts' => $levelCounts,
             'has_multiple_dates' => $hasMultipleDates,
         ];
+    }
+
+    /**
+     * Collapse entries sharing the same level + message into a single entry,
+     * keeping the most recent occurrence and tracking how many times it occurred.
+     */
+    protected function uniqueEntries(array $entries): array
+    {
+        $index = [];
+        $result = [];
+
+        foreach ($entries as $entry) {
+            $key = $entry['level'].'|'.$entry['message'];
+
+            if (isset($index[$key])) {
+                $prev = $result[$index[$key]];
+                unset($result[$index[$key]]);
+                $entry['occurrence_count'] = $prev['occurrence_count'] + 1;
+                $entry['first_seen'] = $prev['first_seen'];
+            } else {
+                $entry['occurrence_count'] = 1;
+                $entry['first_seen'] = $entry['date'];
+            }
+
+            $result[] = $entry;
+            $index[$key] = array_key_last($result);
+        }
+
+        return array_values($result);
     }
 
     protected function hasMultipleDates(array $entries): bool
@@ -351,6 +387,10 @@ class LogManService
             }
         }
 
+        // Detect any JSON objects/arrays embedded in the message or stack so the
+        // viewer can offer a dedicated pretty-printed JSON view.
+        $entry['json_blocks'] = $this->extractJsonBlocks($entry['message']."\n".$entry['stack']);
+
         // Extract exception file/line from message
         if (preg_match('/^(.+?)\s+in\s+(.+?):(\d+)$/', $entry['message'], $m)) {
             $entry['exception_message'] = $m[1];
@@ -386,6 +426,59 @@ class LogManService
                 $entry['exception_class'] = $cleanMsg;
             }
         }
+    }
+
+    /**
+     * Extract balanced JSON objects/arrays embedded in a piece of text and
+     * return them pretty-printed. Only structures that decode successfully to
+     * an array/object are kept.
+     *
+     * @return array<int, string>
+     */
+    protected function extractJsonBlocks(string $text): array
+    {
+        if ($text === '' || (! str_contains($text, '{') && ! str_contains($text, '['))) {
+            return [];
+        }
+
+        // Recursive pattern matching balanced {...} objects and [...] arrays.
+        $pattern = '/(?<json>\{(?:[^{}]|(?&json))*\}|\[(?:[^\[\]]|(?&json))*\])/';
+        if (@preg_match_all($pattern, $text, $matches) === false) {
+            return [];
+        }
+
+        $blocks = [];
+        $seen = [];
+        foreach ($matches['json'] as $candidate) {
+            // Skip trivial structures like {} or [].
+            if (strlen($candidate) < 4) {
+                continue;
+            }
+
+            $decoded = json_decode($candidate, true);
+            if (json_last_error() !== JSON_ERROR_NONE || ! is_array($decoded)) {
+                continue;
+            }
+
+            $pretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($pretty === false) {
+                continue;
+            }
+
+            $hash = md5($pretty);
+            if (isset($seen[$hash])) {
+                continue;
+            }
+            $seen[$hash] = true;
+            $blocks[] = $pretty;
+
+            // Cap to avoid huge payloads from noisy log lines.
+            if (count($blocks) >= 10) {
+                break;
+            }
+        }
+
+        return $blocks;
     }
 
     protected function applySearch(array $entries, string $search, bool $isRegex): array

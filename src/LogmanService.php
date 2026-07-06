@@ -104,6 +104,8 @@ class LogmanService
     protected static array $channelInstances = [];
     protected static ?string $cachedGitCommit = null;
 
+    protected static ?string $cachedGitBranch = null;
+
     /**
      * Resolve enabled channels with their settings.
      *
@@ -454,16 +456,20 @@ class LogmanService
     {
         if (static::$cachedGitCommit === null) {
             static::$cachedGitCommit = '-';
+            static::$cachedGitBranch = '-';
             try {
                 $base = base_path();
                 $headFile = $base . '/.git/HEAD';
                 if (is_file($headFile)) {
                     $head = trim(file_get_contents($headFile));
                     if (str_starts_with($head, 'ref: ')) {
-                        $refFile = $base . '/.git/' . substr($head, 5);
+                        $ref = substr($head, 5);
+                        static::$cachedGitBranch = str_starts_with($ref, 'refs/heads/') ? substr($ref, 11) : $ref;
+                        $refFile = $base . '/.git/' . $ref;
                         static::$cachedGitCommit = is_file($refFile) ? substr(trim(file_get_contents($refFile)), 0, 8) : '-';
                     } else {
                         static::$cachedGitCommit = substr($head, 0, 8);
+                        static::$cachedGitBranch = 'HEAD (detached)';
                     }
                 }
             } catch (Throwable $e) {
@@ -479,6 +485,7 @@ class LogmanService
             'memory' => round(memory_get_peak_usage(true) / 1024 / 1024, 2) . ' MB',
             'hostname' => gethostname() ?: '-',
             'git_commit' => static::$cachedGitCommit,
+            'git_branch' => static::$cachedGitBranch,
             'app_url' => config('app.url'),
         ];
     }

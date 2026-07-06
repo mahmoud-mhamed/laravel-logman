@@ -75,6 +75,11 @@
         .clear-filter-btn:hover { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
         .sort-toggle { padding: 5px 12px; border: 1px solid var(--border); border-radius: 20px; font-size: 11px; cursor: pointer; background: transparent; color: var(--text-muted); text-decoration: none; font-weight: 600; transition: all 0.2s; }
         .sort-toggle:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+        .sort-toggle.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 1px 4px var(--primary-glow); }
+        .sort-toggle.active:hover { background: var(--primary-hover); color: white; }
+
+        /* Occurrence count badge (unique mode) */
+        .occurrence-badge { flex-shrink: 0; display: inline-flex; align-items: center; padding: 1px 7px; font-size: 10px; font-weight: 700; border-radius: 20px; background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary); font-family: var(--font-mono); }
 
         /* Content */
         .content { flex: 1; overflow-y: auto; }
@@ -144,6 +149,9 @@
         /* Highlight */
         mark { background: #fef08a; color: #854d0e; border-radius: 2px; padding: 0 2px; }
         [data-theme="dark"] mark { background: #854d0e; color: #fef08a; }
+
+        /* JSON viewer */
+        @include('logman::partials._json-viewer-styles')
 
         /* Empty / Too large */
         .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-light); gap: 12px; padding: 40px; }
@@ -258,6 +266,7 @@
                         <input type="hidden" name="sort" value="{{ $sortDirection }}">
                         <input type="hidden" name="per_page" value="{{ $perPage }}">
                         <input type="hidden" name="regex" value="{{ $isRegex ? '1' : '0' }}" id="regexInput">
+                        <input type="hidden" name="unique" value="{{ $unique ? '1' : '0' }}">
                         @if($reviewFilter)<input type="hidden" name="review" value="{{ $reviewFilter }}">@endif
                         @if($dateFrom)<input type="hidden" name="date_from" value="{{ $dateFrom }}">@endif
                         @if($dateTo)<input type="hidden" name="date_to" value="{{ $dateTo }}">@endif
@@ -333,6 +342,11 @@
                             <button type="button" class="clear-filter-btn" onclick="clearFilters(['time_from','time_to'])" title="Clear time filter">&times;</button>
                         @endif
                     </div>
+
+                    <a href="{{ route('logman.index', array_merge(request()->query(), ['unique' => $unique ? 0 : 1, 'page' => 1])) }}"
+                       class="sort-toggle {{ $unique ? 'active' : '' }}" title="Collapse duplicate entries — show each unique log once with an occurrence count">
+                        Unique
+                    </a>
 
                     <a href="{{ route('logman.index', array_merge(request()->query(), ['sort' => $sortDirection === 'desc' ? 'asc' : 'desc'])) }}"
                        class="sort-toggle" title="Toggle sort direction">
@@ -432,7 +446,7 @@
                                         @php
                                             $hasStackOrContext = $entry['stack'] || $entry['context'];
                                             $hasLongMessage = mb_strlen($entry['message']) > 150;
-                                            $hasDetails = $hasStackOrContext || $hasLongMessage;
+                                            $hasDetails = $hasStackOrContext || $hasLongMessage || !empty($entry['json_blocks']);
                                         @endphp
                                         <tr class="log-row level-{{ $entry['level_class'] }} {{ !$hasDetails ? 'no-details' : '' }} {{ !empty($entry['is_muted']) ? 'is-muted' : '' }}" @if($hasDetails) onclick="toggleDetail({{ $i }}, this)" @endif data-index="{{ $i }}">
                                             <td>@if($hasDetails)<span class="expand-icon">&#9654;</span>@endif</td>
@@ -448,6 +462,9 @@
                                                         @endif
                                                     </span>
                                                     <span class="message-badges">
+                                                        @if(!empty($entry['occurrence_count']) && $entry['occurrence_count'] > 1)
+                                                            <span class="occurrence-badge" title="Occurred {{ $entry['occurrence_count'] }} times (first seen {{ $entry['first_seen'] ?? $entry['date'] }})">&times;{{ $entry['occurrence_count'] }}</span>
+                                                        @endif
                                                         @if(!empty($entry['reviewed']))
                                                             <span class="review-indicator">
                                                                 &#10003; {{ ucfirst($entry['review_status'] ?? 'reviewed') }}
@@ -675,9 +692,11 @@ function showPane(index, pane, tab) {
 }
 
 function copyText(btn, index, pane) {
-    const el = document.querySelector('#pane-' + index + '-' + pane + ' .stack-content, #pane-' + index + '-' + pane + ' .context-content');
-    if (!el) return;
-    const text = el.textContent;
+    const paneEl = document.getElementById('pane-' + index + '-' + pane);
+    if (!paneEl) return;
+    const els = paneEl.querySelectorAll('.stack-content, .context-content, .json-content');
+    if (!els.length) return;
+    const text = Array.from(els).map(e => e.dataset.raw ?? e.textContent).join('\n\n');
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(() => showCopied(btn));
     } else {
@@ -931,6 +950,9 @@ function escapeHtml(text) {
 function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+// ─── JSON Tree Viewer ──────────────────────────────────────
+@include('logman::partials._json-viewer')
 
 // ─── Review Modal ──────────────────────────────────────────
 function openReviewModal(file, hash, status, note, isReviewed) {

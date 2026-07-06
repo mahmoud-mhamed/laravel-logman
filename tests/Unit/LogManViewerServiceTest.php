@@ -88,4 +88,63 @@ class LogManViewerServiceTest extends TestCase
 
         $this->assertEquals('', $entry['exception_class']);
     }
+
+    public function test_extracts_json_blocks_from_message(): void
+    {
+        $entry = [
+            'date' => '2026-04-14 10:00:00',
+            'level' => 'error',
+            'message' => 'Payment API error {"id":42,"status":"failed","meta":{"retries":3}}',
+            'stack' => '',
+        ];
+
+        $entry = $this->callFinalizeEntry($entry);
+
+        $this->assertNotEmpty($entry['json_blocks']);
+        $decoded = json_decode($entry['json_blocks'][0], true);
+        $this->assertSame(42, $decoded['id']);
+        $this->assertSame('failed', $decoded['status']);
+        $this->assertStringContainsString("\n", $entry['json_blocks'][0], 'JSON block should be pretty printed');
+    }
+
+    public function test_no_json_blocks_when_message_has_no_json(): void
+    {
+        $entry = [
+            'date' => '2026-04-14 10:00:00',
+            'level' => 'info',
+            'message' => 'User logged in successfully',
+            'stack' => '',
+        ];
+
+        $entry = $this->callFinalizeEntry($entry);
+
+        $this->assertSame([], $entry['json_blocks']);
+    }
+
+    public function test_unique_entries_collapses_duplicates_with_count(): void
+    {
+        $service = app(LogManService::class);
+        $ref = new \ReflectionMethod($service, 'uniqueEntries');
+        $ref->setAccessible(true);
+
+        $entries = [
+            ['date' => '2026-04-14 10:00:00', 'level' => 'error', 'message' => 'Boom'],
+            ['date' => '2026-04-14 10:05:00', 'level' => 'error', 'message' => 'Boom'],
+            ['date' => '2026-04-14 10:06:00', 'level' => 'error', 'message' => 'Different'],
+            ['date' => '2026-04-14 10:10:00', 'level' => 'error', 'message' => 'Boom'],
+        ];
+
+        $result = $ref->invoke($service, $entries);
+
+        $this->assertCount(2, $result);
+
+        // The "Boom" entry keeps the most recent occurrence and counts 3.
+        $boom = collect($result)->firstWhere('message', 'Boom');
+        $this->assertSame(3, $boom['occurrence_count']);
+        $this->assertSame('2026-04-14 10:10:00', $boom['date']);
+        $this->assertSame('2026-04-14 10:00:00', $boom['first_seen']);
+
+        $different = collect($result)->firstWhere('message', 'Different');
+        $this->assertSame(1, $different['occurrence_count']);
+    }
 }

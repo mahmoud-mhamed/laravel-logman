@@ -37,7 +37,9 @@ class SlackChannel implements ChannelInterface
 
     protected function formatException(array $p): string
     {
-        $text = '🚨 *' . $p['app'] . "* — Exception in `{$p['env']}`" . PHP_EOL . '<!channel>';
+        $branch = $p['environment']['git_branch'] ?? '-';
+        $text = '🚨 *' . $p['app'] . "* — Exception in `{$p['env']}`" .
+            ($branch !== '-' ? " on `{$branch}`" : '') . PHP_EOL . '<!channel>';
 
         if ($p['suppressed_count'] > 0) {
             $text .= PHP_EOL . "⚠️ *This error was suppressed {$p['suppressed_count']} time(s) since last report (rate limited).*" . PHP_EOL;
@@ -124,6 +126,7 @@ class SlackChannel implements ChannelInterface
             "• Laravel: {$env['laravel']}" . PHP_EOL .
             "• Memory Peak: {$env['memory']}" . PHP_EOL .
             "• Server: {$env['hostname']}" . PHP_EOL .
+            "• Git Branch: `{$env['git_branch']}`" . PHP_EOL .
             "• Git Commit: `{$env['git_commit']}`" . PHP_EOL .
             (!empty($env['app_url']) ? "• App URL: {$env['app_url']}" : '') . PHP_EOL;
 

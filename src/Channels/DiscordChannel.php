@@ -90,7 +90,7 @@ class DiscordChannel implements ChannelInterface
 
         // Environment
         $env = $p['environment'];
-        $fields[] = ['name' => 'Environment', 'value' => "PHP `{$env['php']}` | Laravel `{$env['laravel']}` | Memory `{$env['memory']}`\nServer: `{$env['hostname']}` | Git: `{$env['git_commit']}`", 'inline' => false];
+        $fields[] = ['name' => 'Environment', 'value' => "PHP `{$env['php']}` | Laravel `{$env['laravel']}` | Memory `{$env['memory']}`\nServer: `{$env['hostname']}` | Git: `{$env['git_branch']}@{$env['git_commit']}`", 'inline' => false];
 
         $description = '';
         if ($p['suppressed_count'] > 0) {
@@ -98,7 +98,8 @@ class DiscordChannel implements ChannelInterface
         }
 
         $embeds[] = [
-            'title' => '🚨 ' . $p['app'] . ' — Exception in ' . $p['env'],
+            'title' => '🚨 ' . $p['app'] . ' — Exception in ' . $p['env']
+                . (($p['environment']['git_branch'] ?? '-') !== '-' ? ' on ' . $p['environment']['git_branch'] : ''),
             'description' => $description,
             'color' => 0xDC2626,
             'fields' => $fields,

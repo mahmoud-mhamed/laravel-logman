@@ -29,4 +29,5 @@
     .detail-search-nav button:hover { background: var(--hover); }
     .detail-highlight { background: #fbbf24; color: #1a1d26; border-radius: 2px; padding: 0 1px; }
     .detail-highlight.current { background: #f97316; color: white; }
+    @include('logman::partials._json-viewer-styles')
 </style>
