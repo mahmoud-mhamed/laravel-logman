@@ -111,7 +111,7 @@ class LogmanService
                 return;
             }
 
-            \MahmoudMhamed\Logman\Support\RequestLogger::write($request, $response, respectFilters: false);
+            \MahmoudMhamed\Logman\Support\RequestLogger::write($request, $response, respectFilters: false, captureCaller: true);
         } catch (Throwable $e) {
             // Silently fail — logging must never break the app.
         }

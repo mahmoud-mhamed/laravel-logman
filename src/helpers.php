@@ -18,7 +18,8 @@ if (!function_exists('highlightSearch')) {
  *     logman_log_request($request, $response);
  *
  * This is a manual write — it ignores the request_logging.enabled switch and
- * the skip/allowlist filters, since the call itself is the intent.
+ * the skip/allowlist filters, since the call itself is the intent. The file and
+ * line of the call site are captured and stored as "called_from".
  */
 if (!function_exists('logman_log_request')) {
     function logman_log_request(
@@ -28,7 +29,8 @@ if (!function_exists('logman_log_request')) {
         \MahmoudMhamed\Logman\Support\RequestLogger::write(
             $request ?? request(),
             $response,
-            respectFilters: false
+            respectFilters: false,
+            captureCaller: true
         );
     }
 }

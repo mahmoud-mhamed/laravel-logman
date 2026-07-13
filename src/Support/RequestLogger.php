@@ -24,8 +24,10 @@ class RequestLogger
      * @param  bool  $respectFilters  When true (the middleware path) the enabled
      *   master switch and the skip filters are honoured. When false (an explicit
      *   manual call) they are bypassed — the developer asked for this entry.
+     * @param  bool  $captureCaller  When true (manual calls) the file:line that
+     *   triggered the log is resolved and attached as "called_from".
      */
-    public static function write(Request $request, ?Response $response = null, bool $respectFilters = true): void
+    public static function write(Request $request, ?Response $response = null, bool $respectFilters = true, bool $captureCaller = false): void
     {
         try {
             $config = config('logman.request_logging', []);
@@ -42,6 +44,8 @@ class RequestLogger
 
             $response ??= new Response();
 
+            $caller = $captureCaller ? static::callerLocation() : null;
+
             $channel = $config['channel'] ?? 'logman_requests';
             $level = $config['level'] ?? 'info';
 
@@ -49,12 +53,68 @@ class RequestLogger
 
             Log::channel($channel)->log(
                 $level,
-                static::buildMessage($request, $response, $config),
-                static::buildContext($request, $response, $config),
+                static::buildMessage($request, $response, $config, $caller),
+                static::buildContext($request, $response, $config, $caller),
             );
         } catch (Throwable $e) {
             // Never let request logging break the application.
         }
+    }
+
+    /**
+     * Resolve the file:line of the user code that triggered a manual log.
+     *
+     * Walks the call stack and returns the first frame that lives outside the
+     * Logman package and the framework Facade plumbing — i.e. the developer's
+     * own call site — whether reached via logman_log_request(),
+     * Logman::logRequest(), or the service directly. Returns null if none found.
+     */
+    protected static function callerLocation(): ?string
+    {
+        try {
+            $packageDir = dirname(__DIR__); // .../src
+
+            foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) as $frame) {
+                $file = $frame['file'] ?? null;
+
+                if ($file === null) {
+                    continue;
+                }
+
+                // Skip Logman's own frames and Laravel's Facade dispatcher.
+                if (str_starts_with($file, $packageDir)) {
+                    continue;
+                }
+
+                if (str_ends_with(str_replace('\\', '/', $file), 'Support/Facades/Facade.php')) {
+                    continue;
+                }
+
+                return static::relativePath($file).':'.($frame['line'] ?? 0);
+            }
+        } catch (Throwable $e) {
+            // ignore — caller info is best-effort.
+        }
+
+        return null;
+    }
+
+    /**
+     * Make an absolute path relative to the app base path when possible.
+     */
+    protected static function relativePath(string $file): string
+    {
+        try {
+            $base = base_path();
+        } catch (Throwable $e) {
+            $base = null;
+        }
+
+        if (is_string($base) && $base !== '' && str_starts_with($file, $base)) {
+            return ltrim(substr($file, strlen($base)), DIRECTORY_SEPARATOR.'/\\');
+        }
+
+        return $file;
     }
 
     /**
@@ -140,7 +200,7 @@ class RequestLogger
         return true;
     }
 
-    protected static function buildMessage(Request $request, Response $response, array $config): string
+    protected static function buildMessage(Request $request, Response $response, array $config, ?string $caller = null): string
     {
         $message = strtoupper($request->method()).' /'.ltrim($request->path(), '/');
 
@@ -150,10 +210,14 @@ class RequestLogger
 
         $message .= ' ('.static::duration().')';
 
+        if ($caller !== null) {
+            $message .= ' @ '.$caller;
+        }
+
         return $message;
     }
 
-    protected static function buildContext(Request $request, Response $response, array $config): array
+    protected static function buildContext(Request $request, Response $response, array $config, ?string $caller = null): array
     {
         $max = (int) ($config['max_payload_length'] ?? 8000);
 
@@ -164,6 +228,10 @@ class RequestLogger
             'ip' => (string) $request->ip(),
             'duration' => static::duration(),
         ];
+
+        if ($caller !== null) {
+            $context['called_from'] = $caller;
+        }
 
         if (! empty($config['log_response_status'])) {
             $context['status'] = $response->getStatusCode();
