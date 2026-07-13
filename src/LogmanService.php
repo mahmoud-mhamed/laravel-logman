@@ -435,21 +435,7 @@ class LogmanService
 
     protected function sanitize(array $data): array
     {
-        $hidden = config('logman.hidden_fields', [
-            'password', 'password_confirmation', 'token', 'secret',
-            'credit_card', 'card_number', 'cvv', 'ssn',
-            'authorization', 'api_key', 'api_secret',
-        ]);
-
-        foreach ($data as $key => $value) {
-            if (is_array($value)) {
-                $data[$key] = $this->sanitize($value);
-            } elseif (is_string($key) && in_array(strtolower($key), $hidden)) {
-                $data[$key] = '********';
-            }
-        }
-
-        return $data;
+        return \MahmoudMhamed\Logman\Support\Sanitizer::mask($data);
     }
 
     protected function collectEnvironment(): array

@@ -52,6 +52,13 @@ On top of that, Logman ships with a **full-featured log viewer** you can access 
 - **Zero Dependencies** — no external CSS/JS frameworks, pure standalone UI
 - **Responsive** — works on desktop and mobile
 
+### Request Logging
+- **Log every incoming HTTP request** — disabled by default; flip one switch to capture all requests
+- **Dedicated log file** — written to `logman-requests-*.log` and browsable in the Log Viewer automatically
+- **Configurable payload** — include/exclude query, body, headers, and response status
+- **Path exclusions** — skip assets, health checks, and third-party routes (Logman's own routes are always excluded)
+- **Secret-safe** — bodies, query params, and headers are masked using the same `hidden_fields` as notifications
+
 ---
 
 ## Requirements
@@ -333,6 +340,51 @@ Both checks are lightweight (file read / cache lookup) and **much faster** than 
 | `log_viewer.max_file_size` | `50 MB` | Max file size to display |
 | `log_viewer.per_page` | `25` | Entries per page |
 | `log_viewer.per_page_options` | `[15,25,50,100]` | Available per-page options |
+
+---
+
+### Request Logging
+
+Log every incoming HTTP request to a dedicated log file that shows up in the Log Viewer.
+**Disabled by default** — enable it with the config flag or `LOGMAN_REQUEST_LOGGING=true`.
+
+```php
+'request_logging' => [
+    'enabled' => env('LOGMAN_REQUEST_LOGGING', false),
+    'channel' => 'logman_requests',   // auto-created if not defined in config/logging.php
+    'level' => 'info',
+
+    'log_query' => true,              // query string params
+    'log_body' => true,               // request body (masked)
+    'log_headers' => true,            // curated set of request headers
+    'log_response_status' => true,    // HTTP status code
+    'log_response_body' => false,     // response body (masked; off by default)
+
+    'middleware' => 'global',         // 'global' | 'web' | 'api' | ['web','api']
+    'methods' => [],                  // limit to specific methods, e.g. ['POST','PUT']; empty = all
+    'body_ignore_methods' => ['GET', 'HEAD', 'OPTIONS'],
+
+    'except' => ['telescope*', 'livewire*', '*.js', '*.css', /* ... */],
+    'max_payload_length' => 8000,     // truncate oversized body/query payloads
+],
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `request_logging.enabled` | `false` | Master switch for request logging |
+| `request_logging.channel` | `'logman_requests'` | Logging channel (auto-created via `request_channel_config`) |
+| `request_logging.level` | `'info'` | Log level for request entries |
+| `request_logging.log_query` | `true` | Log query string parameters |
+| `request_logging.log_body` | `true` | Log request body (sensitive fields masked) |
+| `request_logging.log_headers` | `true` | Log a curated set of request headers |
+| `request_logging.log_response_status` | `true` | Include the HTTP response status |
+| `request_logging.log_response_body` | `false` | Include the response body (masked; JSON decoded) |
+| `request_logging.middleware` | `'global'` | Where to attach: `'global'`, a group name, or a list of groups |
+| `request_logging.methods` | `[]` | Only log these methods (empty = all) |
+| `request_logging.except` | asset/vendor patterns | Skip paths matching these patterns (`*` wildcards) |
+| `request_logging.max_payload_length` | `8000` | Truncate oversized payloads |
+
+> Logman's own viewer routes are always excluded, so request logging never logs itself.
 
 ---
 

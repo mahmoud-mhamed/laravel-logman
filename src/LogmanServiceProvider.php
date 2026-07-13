@@ -4,6 +4,7 @@ namespace MahmoudMhamed\Logman;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\ServiceProvider;
 use MahmoudMhamed\Logman\Console\Commands\LogmanClearMutesCommand;
@@ -13,6 +14,7 @@ use MahmoudMhamed\Logman\Console\Commands\LogmanListMutesCommand;
 use MahmoudMhamed\Logman\Console\Commands\LogmanMuteCommand;
 use MahmoudMhamed\Logman\Console\Commands\LogmanTestCommand;
 use MahmoudMhamed\Logman\Http\Middleware\AuthorizeLogman;
+use MahmoudMhamed\Logman\Http\Middleware\LogRequests;
 use MahmoudMhamed\Logman\Services\MuteService;
 use Throwable;
 
@@ -63,6 +65,10 @@ class LogmanServiceProvider extends ServiceProvider
         $this->ensureStorageDirectory();
         $this->injectSlackChannelIfMissing();
 
+        if (config('logman.request_logging.enabled')) {
+            $this->registerRequestLogging();
+        }
+
         if (config('logman.auto_report_exceptions')) {
             $this->registerExceptionReporting();
         }
@@ -108,6 +114,47 @@ class LogmanServiceProvider extends ServiceProvider
         if (config("logging.channels.{$channelName}") === null) {
             $channelConfig = config('logman.slack_channel_config', []);
             config(["logging.channels.{$channelName}" => $channelConfig]);
+        }
+    }
+
+    protected function registerRequestLogging(): void
+    {
+        // Auto-create the dedicated logging channel if the app hasn't defined it.
+        $channelName = config('logman.request_logging.channel', 'logman_requests');
+
+        if (config("logging.channels.{$channelName}") === null) {
+            $channelConfig = config('logman.request_channel_config', []);
+            config(["logging.channels.{$channelName}" => $channelConfig]);
+        }
+
+        // Only meaningful for HTTP requests — skip console/queue processes.
+        if ($this->app->runningInConsole()) {
+            return;
+        }
+
+        try {
+            $kernel = $this->app->make(HttpKernel::class);
+            $target = config('logman.request_logging.middleware', 'global');
+
+            // 'global' (or empty) → run on every request.
+            if ($target === 'global' || $target === null || $target === []) {
+                if (method_exists($kernel, 'hasMiddleware') && $kernel->hasMiddleware(LogRequests::class)) {
+                    return;
+                }
+
+                $kernel->pushMiddleware(LogRequests::class);
+
+                return;
+            }
+
+            // Otherwise attach to one or more named route middleware groups.
+            $router = $this->app['router'];
+
+            foreach ((array) $target as $group) {
+                $router->pushMiddlewareToGroup($group, LogRequests::class);
+            }
+        } catch (Throwable $e) {
+            // HTTP kernel/router may not be resolvable in every context — fail silently.
         }
     }
 

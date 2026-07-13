@@ -114,6 +114,80 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Request Logging
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, Logman logs every incoming HTTP request to a dedicated
+    | log channel. Disabled by default. The generated log file lives in the
+    | viewer's storage path, so it shows up automatically in the Log Viewer.
+    |
+    */
+    'request_logging' => [
+
+        // Master switch — disabled by default.
+        'enabled' => env('LOGMAN_REQUEST_LOGGING', false),
+
+        // Dedicated logging channel used for request entries.
+        // Auto-created (see request_channel_config) if not already defined.
+        'channel' => 'logman_requests',
+
+        // Log level used for each request entry.
+        'level' => 'info',
+
+        // What to capture in each entry (sanitized via hidden_fields).
+        'log_query' => true,      // Query string parameters
+        'log_body' => true,       // Request body (POST/PUT/PATCH ...)
+        'log_headers' => true,    // A curated set of request headers
+        'log_response_status' => true, // HTTP status code of the response
+        'log_response_body' => false,  // Response body (off by default — can be large/sensitive)
+
+        // Where to attach the request-logging middleware.
+        //   'global'          → every request (default)
+        //   'web' / 'api'     → only that route middleware group
+        //   ['web', 'api']    → multiple groups
+        'middleware' => 'global',
+
+        // Only log these HTTP methods. Empty = log all methods.
+        'methods' => [],
+
+        // Do not log the request body for these methods (usually none have one).
+        'body_ignore_methods' => ['GET', 'HEAD', 'OPTIONS'],
+
+        // Skip requests whose path matches any of these patterns (supports *).
+        // Logman's own viewer routes are always excluded automatically.
+        'except' => [
+            'telescope*',
+            'horizon*',
+            '_debugbar*',
+            'livewire*',
+            'sanctum*',
+            '*.js', '*.css', '*.ico', '*.map',
+            '*.png', '*.jpg', '*.jpeg', '*.gif', '*.svg', '*.webp',
+            '*.woff', '*.woff2', '*.ttf', '*.eot',
+        ],
+
+        // Max characters kept for the body/headers payload (guards huge uploads).
+        'max_payload_length' => 8000,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Request Channel Config (auto-injected into logging.channels)
+    |--------------------------------------------------------------------------
+    |
+    | If the request_logging.channel above isn't already defined in your
+    | app's logging config, Logman creates it automatically using this.
+    |
+    */
+    'request_channel_config' => [
+        'driver' => 'daily',
+        'path' => storage_path('logs/logman-requests.log'),
+        'level' => 'debug',
+        'days' => 14,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Slack Channel Config (auto-injected into logging.channels)
     |--------------------------------------------------------------------------
     |
