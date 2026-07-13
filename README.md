@@ -434,6 +434,27 @@ Logman::logRequest();          // current request
 Logman::logRequest($request);  // a specific request
 ```
 
+Each manual entry records the **file and line it was called from** (`called_from`), shown as a banner at the top of the log's detail view.
+
+**Open in your IDE:** set `LOGMAN_EDITOR` and that `called_from` location becomes a clickable link that jumps straight to the source.
+
+```dotenv
+# phpstorm | idea | vscode | vscode-insiders | vscodium | sublime
+# | atom | nova | macvim | emacs | textmate | netbeans
+LOGMAN_EDITOR=phpstorm
+```
+
+Viewing logs written on a server? Map the remote path to your local checkout in `config/logman.php`:
+
+```php
+'viewer' => [
+    'editor' => env('LOGMAN_EDITOR'),
+    'editor_path_map' => [
+        '/var/www/app' => '/Users/me/Code/app',
+    ],
+],
+```
+
 ---
 
 ## Pages
