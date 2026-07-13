@@ -1,12 +1,16 @@
 @php
     $isChannel = str_starts_with($sectionName, 'Channel:');
-    $channelEnabled = $isChannel && collect($items)->first(fn($i) => str_ends_with($i['key'], '.enabled'))['value'] ?? false;
+    // Sections that carry an on/off master switch (channels + request logging)
+    // get an Active/Disabled badge and enabled/disabled styling.
+    $hasToggle = $isChannel || $sectionName === 'Request Logging';
+    $enabledItem = collect($items)->first(fn($i) => str_ends_with($i['key'], '.enabled'));
+    $sectionOn = $hasToggle && ($enabledItem['value'] ?? false);
 @endphp
-<div class="config-section {{ $isChannel && $channelEnabled ? 'channel-enabled' : '' }} {{ $isChannel && !$channelEnabled ? 'channel-disabled' : '' }}">
+<div class="config-section {{ $hasToggle && $sectionOn ? 'channel-enabled' : '' }} {{ $isChannel && !$sectionOn ? 'channel-disabled' : '' }}">
     <div class="config-section-title">
         {{ $sectionName }}
-        @if($isChannel)
-            @if($channelEnabled)
+        @if($hasToggle)
+            @if($sectionOn)
                 <span class="channel-status-badge channel-on">Active</span>
             @else
                 <span class="channel-status-badge channel-off">Disabled</span>

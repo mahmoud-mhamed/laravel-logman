@@ -150,6 +150,10 @@
                     <span class="env-label">Log Viewer</span>
                     <span class="env-value" style="color:{{ $config['viewer']['enabled'] ?? true ? 'var(--debug-text)' : 'var(--danger-text)' }}">{{ ($config['viewer']['enabled'] ?? true) ? '/' . ($config['viewer']['route_prefix'] ?? 'logman') : 'Disabled' }}</span>
                 </div>
+                <div class="env-row">
+                    <span class="env-label">Request Logging</span>
+                    <span class="env-value" style="color:{{ !empty($config['request_logging']['enabled']) ? 'var(--debug-text)' : 'var(--danger-text)' }}">{{ !empty($config['request_logging']['enabled']) ? 'Enabled' : 'Disabled' }}</span>
+                </div>
             </div>
 
             <div class="about-card">
@@ -316,6 +320,7 @@
                 <div class="feature-item"><span class="fi-icon">&#10003;</span> Automatic exception reporting</div>
                 <div class="feature-item"><span class="fi-icon">&#10003;</span> Rich error details (trace, request, auth, queries)</div>
                 <div class="feature-item"><span class="fi-icon">&#10003;</span> Log viewer with search, regex, filters</div>
+                <div class="feature-item"><span class="fi-icon">&#10003;</span> Request logging (per-method / per-URL filters)</div>
                 <div class="feature-item"><span class="fi-icon">&#10003;</span> Analysis dashboard with charts</div>
                 <div class="feature-item"><span class="fi-icon">&#10003;</span> Mute & throttle system</div>
                 <div class="feature-item"><span class="fi-icon">&#10003;</span> Two-level rate limiting (global + per-channel)</div>
@@ -346,6 +351,10 @@
                 <div class="cmd-item">
                     <code>Logman::sendInfo('message')</code>
                     <span class="cmd-desc">Send an info message to all enabled channels</span>
+                </div>
+                <div class="cmd-item">
+                    <code>logman_log_request()</code>
+                    <span class="cmd-desc">Log the current request on demand (also Logman::logRequest())</span>
                 </div>
             </div>
             <div style="margin-top:12px;padding:12px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px;color:var(--text-muted);font-family:var(--font-mono);line-height:1.8;">
