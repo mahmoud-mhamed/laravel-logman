@@ -378,12 +378,18 @@ class LogManService
     {
         $entry['hash'] = md5($entry['date'].'|'.$entry['level'].'|'.$entry['message']);
         $entry['stack'] = trim($entry['stack']);
+        $entry['called_from'] = '';
 
         // Extract JSON context from stack trace
         if ($entry['stack'] && preg_match('/^(\{[\s\S]*?\})\s*$/m', $entry['stack'], $jsonMatch)) {
             $decoded = json_decode($jsonMatch[1], true);
             if (json_last_error() === JSON_ERROR_NONE) {
                 $entry['context'] = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+                // Surfaced by manual request logging (logman_log_request()).
+                if (is_array($decoded) && ! empty($decoded['called_from']) && is_string($decoded['called_from'])) {
+                    $entry['called_from'] = $decoded['called_from'];
+                }
             }
         }
 

@@ -201,6 +201,37 @@ class LogRequestsTest extends TestCase
         $this->assertSame(['foo' => 'bar'], $captured[0]['context']['body']);
     }
 
+    public function test_manual_helper_captures_caller_file_and_line(): void
+    {
+        config(['logman.request_logging.enabled' => false]);
+
+        $captured = [];
+        $this->fakeChannel($captured);
+
+        logman_log_request(Request::create('/manual/hit', 'GET')); $expectedLine = __LINE__;
+
+        $this->assertCount(1, $captured);
+        $calledFrom = $captured[0]['context']['called_from'] ?? null;
+        $this->assertNotNull($calledFrom, 'called_from should be captured for manual calls');
+        $this->assertStringContainsString('LogRequestsTest.php', $calledFrom);
+        $this->assertStringEndsWith(':'.$expectedLine, $calledFrom);
+        // ...and surfaced in the log message.
+        $this->assertStringContainsString('@ ', $captured[0]['message']);
+    }
+
+    public function test_middleware_does_not_capture_caller(): void
+    {
+        config(['logman.request_logging.enabled' => true]);
+
+        $captured = [];
+        $this->fakeChannel($captured);
+
+        $this->invoke(Request::create('/users', 'GET'), new Response('ok'));
+
+        $this->assertCount(1, $captured);
+        $this->assertArrayNotHasKey('called_from', $captured[0]['context'], 'Automatic middleware logs carry no caller info');
+    }
+
     public function test_facade_log_request_logs_the_given_request(): void
     {
         config(['logman.request_logging.enabled' => false]);

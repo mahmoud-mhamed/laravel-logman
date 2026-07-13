@@ -19,6 +19,34 @@ class LogManViewerServiceTest extends TestCase
         return $entry;
     }
 
+    public function test_extracts_called_from_from_request_context(): void
+    {
+        $entry = [
+            'date' => '2026-04-14 10:00:00',
+            'level' => 'info',
+            'message' => 'GET /orders → 200 (12 ms) @ app/Http/Controllers/OrderController.php:42',
+            'stack' => '{"method":"GET","url":"http://x/orders","called_from":"app/Http/Controllers/OrderController.php:42"}',
+        ];
+
+        $entry = $this->callFinalizeEntry($entry);
+
+        $this->assertSame('app/Http/Controllers/OrderController.php:42', $entry['called_from']);
+    }
+
+    public function test_called_from_empty_when_absent(): void
+    {
+        $entry = [
+            'date' => '2026-04-14 10:00:00',
+            'level' => 'info',
+            'message' => 'GET /orders → 200 (12 ms)',
+            'stack' => '{"method":"GET","url":"http://x/orders"}',
+        ];
+
+        $entry = $this->callFinalizeEntry($entry);
+
+        $this->assertSame('', $entry['called_from']);
+    }
+
     public function test_extracts_class_from_stack_trace_start_of_line(): void
     {
         $entry = [

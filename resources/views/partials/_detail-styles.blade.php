@@ -9,6 +9,10 @@
     .detail-row.visible { display: table-row; }
     .detail-row td { padding: 0 12px 12px 12px; background: var(--bg) !important; }
     .detail-content { background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow-sm); }
+    .called-from-bar { display: flex; align-items: center; gap: 8px; padding: 8px 20px; border-bottom: 1px solid var(--border); background: var(--info-bg); color: var(--info-text); font-size: 12px; }
+    .called-from-bar svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.8; }
+    .called-from-bar .cf-label { font-weight: 600; }
+    .called-from-bar .cf-loc { font-family: var(--font-mono); font-weight: 600; word-break: break-all; }
     .detail-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-sidebar); }
     .detail-tab { padding: 9px 18px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-light); border-bottom: 2px solid transparent; transition: all 0.2s; background: none; border-top: none; border-left: none; border-right: none; }
     .detail-tab:hover { color: var(--text); }
