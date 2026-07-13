@@ -285,6 +285,17 @@ return [
         // URL prefix (e.g. /logman)
         'route_prefix' => 'logman',
 
+        // "Open in IDE" links for source locations (e.g. the manual request-log
+        // "called_from" reference). Set LOGMAN_EDITOR to one of:
+        //   phpstorm, idea, vscode, vscode-insiders, vscodium, sublime, atom,
+        //   nova, macvim, emacs, textmate, netbeans
+        // Leave null to render locations as plain text (no clickable link).
+        'editor' => env('LOGMAN_EDITOR'),
+
+        // Optional remote→local path mapping so server logs open in your local
+        // IDE. Example: ['/var/www/app' => '/Users/me/Code/app'].
+        'editor_path_map' => [],
+
         // Middleware applied to log viewer routes
         // Add 'auth' for production: ['web', 'auth']
         'middleware' => ['web'],

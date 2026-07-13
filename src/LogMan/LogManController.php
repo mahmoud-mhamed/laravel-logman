@@ -489,6 +489,7 @@ class LogManController extends Controller
             'Log Viewer' => [
                 ['key' => 'viewer.enabled', 'label' => 'Enabled', 'value' => $config['viewer']['enabled'] ?? true, 'type' => 'bool', 'description' => 'Enable or disable log viewer routes'],
                 ['key' => 'viewer.route_prefix', 'label' => 'Route Prefix', 'value' => $config['viewer']['route_prefix'] ?? 'logman', 'type' => 'string', 'description' => 'URL prefix for the log viewer'],
+                ['key' => 'viewer.editor', 'label' => 'IDE Editor', 'value' => $config['viewer']['editor'] ?: 'None (plain text)', 'type' => 'string', 'description' => 'Make source locations clickable to open in your IDE (LOGMAN_EDITOR)'],
                 ['key' => 'viewer.middleware', 'label' => 'Middleware', 'value' => $config['viewer']['middleware'] ?? [], 'type' => 'list', 'description' => 'Middleware applied to log viewer routes'],
                 ['key' => 'viewer.authorize', 'label' => 'Authorize', 'value' => $config['viewer']['authorize'] !== null ? 'Custom callback' : 'None (open)', 'type' => $config['viewer']['authorize'] !== null ? 'string' : 'status', 'description' => 'Authorization callback for access control'],
                 ['key' => 'viewer.storage_path', 'label' => 'Logs Path', 'value' => $config['viewer']['storage_path'] ?? '-', 'type' => 'path', 'description' => 'Path to Laravel log files directory'],

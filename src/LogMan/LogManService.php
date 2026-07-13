@@ -379,6 +379,7 @@ class LogManService
         $entry['hash'] = md5($entry['date'].'|'.$entry['level'].'|'.$entry['message']);
         $entry['stack'] = trim($entry['stack']);
         $entry['called_from'] = '';
+        $entry['called_from_href'] = null;
 
         // Extract JSON context from stack trace
         if ($entry['stack'] && preg_match('/^(\{[\s\S]*?\})\s*$/m', $entry['stack'], $jsonMatch)) {
@@ -389,6 +390,7 @@ class LogManService
                 // Surfaced by manual request logging (logman_log_request()).
                 if (is_array($decoded) && ! empty($decoded['called_from']) && is_string($decoded['called_from'])) {
                     $entry['called_from'] = $decoded['called_from'];
+                    $entry['called_from_href'] = \MahmoudMhamed\Logman\Support\EditorLink::url($decoded['called_from']);
                 }
             }
         }

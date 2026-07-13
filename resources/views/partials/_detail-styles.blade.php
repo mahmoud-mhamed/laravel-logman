@@ -13,6 +13,9 @@
     .called-from-bar svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.8; }
     .called-from-bar .cf-label { font-weight: 600; }
     .called-from-bar .cf-loc { font-family: var(--font-mono); font-weight: 600; word-break: break-all; }
+    .called-from-bar a.cf-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-style: dotted; cursor: pointer; }
+    .called-from-bar a.cf-link:hover { text-decoration-style: solid; opacity: 0.85; }
+    .called-from-bar a.cf-link::after { content: '↗'; margin-left: 4px; font-family: inherit; opacity: 0.7; }
     .detail-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-sidebar); }
     .detail-tab { padding: 9px 18px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-light); border-bottom: 2px solid transparent; transition: all 0.2s; background: none; border-top: none; border-left: none; border-right: none; }
     .detail-tab:hover { color: var(--text); }

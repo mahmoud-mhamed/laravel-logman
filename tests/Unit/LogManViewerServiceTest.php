@@ -47,6 +47,42 @@ class LogManViewerServiceTest extends TestCase
         $this->assertSame('', $entry['called_from']);
     }
 
+    public function test_called_from_href_built_when_editor_configured(): void
+    {
+        config(['logman.viewer.editor' => 'phpstorm']);
+
+        $entry = [
+            'date' => '2026-04-14 10:00:00',
+            'level' => 'info',
+            'message' => 'GET /orders (12 ms)',
+            'stack' => '{"method":"GET","called_from":"app/Http/Controllers/OrderController.php:42"}',
+        ];
+
+        $entry = $this->callFinalizeEntry($entry);
+
+        $this->assertNotNull($entry['called_from_href']);
+        $this->assertStringStartsWith('phpstorm://open?file=', $entry['called_from_href']);
+        $this->assertStringContainsString('app/Http/Controllers/OrderController.php', $entry['called_from_href']);
+        $this->assertStringEndsWith('&line=42', $entry['called_from_href']);
+    }
+
+    public function test_called_from_href_null_when_no_editor(): void
+    {
+        config(['logman.viewer.editor' => null]);
+
+        $entry = [
+            'date' => '2026-04-14 10:00:00',
+            'level' => 'info',
+            'message' => 'GET /orders (12 ms)',
+            'stack' => '{"called_from":"app/Foo.php:10"}',
+        ];
+
+        $entry = $this->callFinalizeEntry($entry);
+
+        $this->assertSame('app/Foo.php:10', $entry['called_from']);
+        $this->assertNull($entry['called_from_href']);
+    }
+
     public function test_extracts_class_from_stack_trace_start_of_line(): void
     {
         $entry = [
