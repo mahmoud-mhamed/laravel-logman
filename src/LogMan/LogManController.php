@@ -408,6 +408,7 @@ class LogManController extends Controller
         $config = config('logman');
 
         $channels = $config['channels'] ?? [];
+        $rl = $config['request_logging'] ?? [];
 
         // Organize into sections
         $sections = [
@@ -454,6 +455,22 @@ class LogManController extends Controller
                 ['key' => 'channels.mail.throttle', 'label' => 'Throttle (s)', 'value' => $channels['mail']['throttle'] ?? 60, 'type' => 'number', 'description' => 'Per-channel cooldown in seconds'],
                 ['key' => 'channels.mail.to', 'label' => 'Recipients', 'value' => array_filter((array) ($channels['mail']['to'] ?? [])), 'type' => 'list', 'description' => 'Email recipients'],
                 ['key' => 'channels.mail.from', 'label' => 'From', 'value' => $channels['mail']['from'] ?? config('mail.from.address') ?? '-', 'type' => 'string', 'description' => 'Sender address'],
+            ],
+            'Request Logging' => [
+                ['key' => 'request_logging.enabled', 'label' => 'Enabled', 'value' => $rl['enabled'] ?? false, 'type' => 'bool', 'description' => 'Log incoming HTTP requests to a dedicated channel (LOGMAN_REQUEST_LOGGING)'],
+                ['key' => 'request_logging.channel', 'label' => 'Channel', 'value' => $rl['channel'] ?? 'logman_requests', 'type' => 'string', 'description' => 'Logging channel used for request entries (auto-created)'],
+                ['key' => 'request_logging.level', 'label' => 'Level', 'value' => $rl['level'] ?? 'info', 'type' => 'string', 'description' => 'Log level for each request entry'],
+                ['key' => 'request_logging.middleware', 'label' => 'Middleware', 'value' => is_array($rl['middleware'] ?? null) ? $rl['middleware'] : [($rl['middleware'] ?? 'global')], 'type' => 'list', 'description' => "Where it attaches: 'global', a route group, or a list of groups"],
+                ['key' => 'request_logging.methods', 'label' => 'Methods', 'value' => array_values(array_filter((array) ($rl['methods'] ?? []))), 'type' => 'list', 'description' => 'Only log these HTTP methods — empty = all (LOGMAN_REQUEST_METHODS)'],
+                ['key' => 'request_logging.only', 'label' => 'Only (paths)', 'value' => array_values(array_filter((array) ($rl['only'] ?? []))), 'type' => 'list', 'description' => 'Path allowlist with * wildcards — empty = all (LOGMAN_REQUEST_ONLY)'],
+                ['key' => 'request_logging.only_containing', 'label' => 'Only Containing', 'value' => array_values(array_filter((array) ($rl['only_containing'] ?? []))), 'type' => 'list', 'description' => 'URL substring allowlist — empty = all (LOGMAN_REQUEST_ONLY_CONTAINING)'],
+                ['key' => 'request_logging.log_query', 'label' => 'Log Query', 'value' => $rl['log_query'] ?? true, 'type' => 'bool', 'description' => 'Capture query string parameters (sensitive fields masked)'],
+                ['key' => 'request_logging.log_body', 'label' => 'Log Body', 'value' => $rl['log_body'] ?? true, 'type' => 'bool', 'description' => 'Capture the request body (sensitive fields masked)'],
+                ['key' => 'request_logging.log_headers', 'label' => 'Log Headers', 'value' => $rl['log_headers'] ?? true, 'type' => 'bool', 'description' => 'Capture a curated set of request headers'],
+                ['key' => 'request_logging.log_response_status', 'label' => 'Log Response Status', 'value' => $rl['log_response_status'] ?? true, 'type' => 'bool', 'description' => 'Include the HTTP response status code'],
+                ['key' => 'request_logging.log_response_body', 'label' => 'Log Response Body', 'value' => $rl['log_response_body'] ?? false, 'type' => 'bool', 'description' => 'Include the response body (off by default — can be large)'],
+                ['key' => 'request_logging.max_payload_length', 'label' => 'Max Payload Length', 'value' => $rl['max_payload_length'] ?? 8000, 'type' => 'number', 'description' => 'Truncate oversized body/query payloads (characters)'],
+                ['key' => 'request_logging.except', 'label' => 'Except', 'value' => array_values(array_filter((array) ($rl['except'] ?? []))), 'type' => 'list', 'description' => 'Skip paths matching these patterns (* wildcards)'],
             ],
             'Daily Digest' => [
                 ['key' => 'daily_digest.enabled', 'label' => 'Enabled', 'value' => $config['daily_digest']['enabled'] ?? false, 'type' => 'bool', 'description' => 'Automatically send a daily digest summary (no manual scheduler setup needed)'],
@@ -727,27 +744,49 @@ class LogManController extends Controller
 
     // ─── Clear All ─────────────────────────────────────────
 
-    public function clearAll(MuteService $muteService)
+    public function clearAll(Request $request, MuteService $muteService)
     {
+        $validated = $request->validate([
+            'types' => 'required|array|min:1',
+            'types.*' => 'string|in:files,mutes,throttles,bookmarks',
+        ]);
+
+        $types = $validated['types'];
+        $parts = [];
+
         // Delete all log files
-        $files = $this->viewer->getFiles();
-        $fileNames = $files->pluck('name')->toArray();
-        $deletedFiles = $this->viewer->deleteMultiple($fileNames);
+        if (in_array('files', $types, true)) {
+            $fileNames = $this->viewer->getFiles()->pluck('name')->toArray();
+            $deletedFiles = $this->viewer->deleteMultiple($fileNames);
+            $parts[] = "{$deletedFiles} file(s)";
+        }
 
         // Clear all mutes
-        foreach ($muteService->getMutes() as $mute) {
-            $muteService->unmute($mute['id']);
+        if (in_array('mutes', $types, true)) {
+            $mutes = $muteService->getMutes();
+            foreach ($mutes as $mute) {
+                $muteService->unmute($mute['id']);
+            }
+            $parts[] = count($mutes) . ' mute(s)';
         }
 
         // Clear all throttles
-        foreach ($muteService->getThrottles() as $throttle) {
-            $muteService->removeThrottle($throttle['id']);
+        if (in_array('throttles', $types, true)) {
+            $throttles = $muteService->getThrottles();
+            foreach ($throttles as $throttle) {
+                $muteService->removeThrottle($throttle['id']);
+            }
+            $parts[] = count($throttles) . ' throttle(s)';
         }
 
         // Clear all bookmarks
-        $this->viewer->clearAllBookmarks();
+        if (in_array('bookmarks', $types, true)) {
+            $bookmarkCount = count($this->viewer->getBookmarks());
+            $this->viewer->clearAllBookmarks();
+            $parts[] = "{$bookmarkCount} bookmark(s)";
+        }
 
-        return redirect()->route('logman.index')->with('success', "Cleared all: {$deletedFiles} file(s), mutes, throttles, and bookmarks removed.");
+        return redirect()->route('logman.index')->with('success', 'Cleared: ' . implode(', ', $parts) . '.');
     }
 
     // ─── About ─────────────────────────────────────────────

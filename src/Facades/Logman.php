@@ -9,6 +9,7 @@ use MahmoudMhamed\Logman\LogmanService;
  * @method static void logException(\Throwable $throwable)
  * @method static void sendInfo(string $message)
  * @method static void slackLogInfo(string $message)
+ * @method static void logRequest(\Illuminate\Http\Request|null $request = null, \Symfony\Component\HttpFoundation\Response|null $response = null)
  * @method static void registerDriver(string $name, string $class)
  *
  * @see \MahmoudMhamed\Logman\LogmanService

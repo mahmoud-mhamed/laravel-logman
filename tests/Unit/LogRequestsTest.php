@@ -132,6 +132,88 @@ class LogRequestsTest extends TestCase
         $this->assertArrayNotHasKey('response_body', $captured[0]['context']);
     }
 
+    public function test_only_path_allowlist_logs_matching_and_skips_others(): void
+    {
+        config([
+            'logman.request_logging.enabled' => true,
+            'logman.request_logging.only' => ['api/*'],
+        ]);
+
+        $captured = [];
+        $this->fakeChannel($captured);
+
+        $this->invoke(Request::create('/api/orders', 'GET'), new Response('ok'));
+        $this->invoke(Request::create('/home', 'GET'), new Response('ok'));
+
+        $this->assertCount(1, $captured, 'Only the allowlisted path should be logged');
+        $this->assertStringContainsString('GET /api/orders', $captured[0]['message']);
+    }
+
+    public function test_only_containing_allowlist_matches_substring_in_url(): void
+    {
+        config([
+            'logman.request_logging.enabled' => true,
+            'logman.request_logging.only_containing' => ['checkout'],
+        ]);
+
+        $captured = [];
+        $this->fakeChannel($captured);
+
+        $this->invoke(Request::create('/shop/checkout/pay', 'GET'), new Response('ok'));
+        $this->invoke(Request::create('/shop/browse', 'GET'), new Response('ok'));
+
+        $this->assertCount(1, $captured);
+        $this->assertStringContainsString('checkout', $captured[0]['context']['url']);
+    }
+
+    public function test_allowlists_are_combined_with_or(): void
+    {
+        config([
+            'logman.request_logging.enabled' => true,
+            'logman.request_logging.only' => ['admin/*'],
+            'logman.request_logging.only_containing' => ['?debug=1'],
+        ]);
+
+        $captured = [];
+        $this->fakeChannel($captured);
+
+        $this->invoke(Request::create('/admin/users', 'GET'), new Response('ok'));   // matches "only"
+        $this->invoke(Request::create('/home?debug=1', 'GET'), new Response('ok'));  // matches "only_containing"
+        $this->invoke(Request::create('/home', 'GET'), new Response('ok'));          // matches neither
+
+        $this->assertCount(2, $captured);
+    }
+
+    public function test_manual_helper_logs_even_when_disabled(): void
+    {
+        config([
+            'logman.request_logging.enabled' => false,
+            'logman.request_logging.only' => ['nothing-matches'],
+        ]);
+
+        $captured = [];
+        $this->fakeChannel($captured);
+
+        logman_log_request(Request::create('/manual/hit', 'POST', ['foo' => 'bar']));
+
+        $this->assertCount(1, $captured, 'Manual helper bypasses enabled + allowlist filters');
+        $this->assertStringContainsString('POST /manual/hit', $captured[0]['message']);
+        $this->assertSame(['foo' => 'bar'], $captured[0]['context']['body']);
+    }
+
+    public function test_facade_log_request_logs_the_given_request(): void
+    {
+        config(['logman.request_logging.enabled' => false]);
+
+        $captured = [];
+        $this->fakeChannel($captured);
+
+        \MahmoudMhamed\Logman\Facades\Logman::logRequest(Request::create('/facade/hit', 'GET'));
+
+        $this->assertCount(1, $captured);
+        $this->assertStringContainsString('GET /facade/hit', $captured[0]['message']);
+    }
+
     /**
      * Swap the logging channel for a spy that records level/message/context.
      */

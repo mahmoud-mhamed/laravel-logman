@@ -148,7 +148,30 @@ return [
         'middleware' => 'global',
 
         // Only log these HTTP methods. Empty = log all methods.
-        'methods' => [],
+        // Read from env as a comma-separated list, e.g. LOGMAN_REQUEST_METHODS="POST,PUT,DELETE".
+        'methods' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('LOGMAN_REQUEST_METHODS', ''))
+        ))),
+
+        // Allowlist by PATH — only log requests whose path matches one of these
+        // patterns (supports * wildcards, e.g. "api/*", "admin/users").
+        // Empty = no path restriction. Read from env as a comma-separated list:
+        //   LOGMAN_REQUEST_ONLY="api/orders/*,checkout"
+        'only' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('LOGMAN_REQUEST_ONLY', ''))
+        ))),
+
+        // Allowlist by SUBSTRING — only log requests whose full URL contains one
+        // of these strings. Empty = no restriction. Read from env:
+        //   LOGMAN_REQUEST_ONLY_CONTAINING="checkout,?debug=1"
+        // When both "only" and "only_containing" are set, a request is logged if
+        // it satisfies EITHER list.
+        'only_containing' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('LOGMAN_REQUEST_ONLY_CONTAINING', ''))
+        ))),
 
         // Do not log the request body for these methods (usually none have one).
         'body_ignore_methods' => ['GET', 'HEAD', 'OPTIONS'],

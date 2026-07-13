@@ -1199,22 +1199,59 @@ document.addEventListener('click', function(e) {
 </div>
 
 {{-- Clear All Modal --}}
+<style>
+.clear-all-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+}
+.clear-all-row:hover { background: var(--hover, rgba(127,127,127,.08)); }
+.clear-all-row span:first-child { display: flex; align-items: center; gap: 8px; }
+.clear-all-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--hover, rgba(127,127,127,.12));
+    border-radius: 10px;
+    padding: 1px 9px;
+    min-width: 20px;
+    text-align: center;
+}
+</style>
 <div class="modal-overlay" id="clearAllModal" onclick="if(event.target===this)closeClearAllModal()">
     <div class="modal">
         <h3 style="color:var(--danger);">Clear All Data</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">This action will permanently delete:</p>
-        <ul style="font-size:13px;color:var(--text);margin:0 0 16px 18px;line-height:1.8;">
-            <li><strong>{{ $files->count() }}</strong> log file(s)</li>
-            <li>All active <strong>mutes</strong></li>
-            <li>All active <strong>throttles</strong></li>
-            <li>All saved <strong>bookmarks</strong></li>
-        </ul>
-        <p style="font-size:12px;color:var(--danger);margin-bottom:16px;">This cannot be undone.</p>
-        <form method="POST" action="{{ route('logman.clear-all') }}">
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Select what to permanently delete:</p>
+        <form method="POST" action="{{ route('logman.clear-all') }}" id="clearAllForm">
             @csrf
+            <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:16px;">
+                <label class="clear-all-row">
+                    <span><input type="checkbox" name="types[]" value="files" checked> Log files</span>
+                    <span class="clear-all-count">{{ $files->count() }}</span>
+                </label>
+                <label class="clear-all-row">
+                    <span><input type="checkbox" name="types[]" value="mutes" checked> Mutes</span>
+                    <span class="clear-all-count">{{ count($activeMutes) }}</span>
+                </label>
+                <label class="clear-all-row">
+                    <span><input type="checkbox" name="types[]" value="throttles" checked> Throttles</span>
+                    <span class="clear-all-count">{{ count($activeThrottles) }}</span>
+                </label>
+                <label class="clear-all-row">
+                    <span><input type="checkbox" name="types[]" value="bookmarks" checked> Bookmarks</span>
+                    <span class="clear-all-count">{{ count($bookmarkedHashes) }}</span>
+                </label>
+            </div>
+            <p style="font-size:12px;color:var(--danger);margin-bottom:16px;">This cannot be undone.</p>
             <div class="modal-actions">
                 <button type="button" class="btn btn-sm" onclick="closeClearAllModal()">Cancel</button>
-                <button type="submit" class="btn btn-sm btn-danger">Yes, Clear All</button>
+                <button type="submit" class="btn btn-sm btn-danger" id="clearAllSubmit">Clear Selected</button>
             </div>
         </form>
     </div>
@@ -1227,6 +1264,20 @@ function openClearAllModal() {
 function closeClearAllModal() {
     document.getElementById('clearAllModal').classList.remove('open');
 }
+(function () {
+    var form = document.getElementById('clearAllForm');
+    if (!form) return;
+    var submit = document.getElementById('clearAllSubmit');
+    function sync() {
+        var checked = form.querySelectorAll('input[name="types[]"]:checked').length;
+        submit.disabled = checked === 0;
+        submit.textContent = checked === 0 ? 'Select at least one' : 'Clear Selected';
+    }
+    form.querySelectorAll('input[name="types[]"]').forEach(function (cb) {
+        cb.addEventListener('change', sync);
+    });
+    sync();
+})();
 </script>
 
 </body>

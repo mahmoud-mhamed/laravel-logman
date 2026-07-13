@@ -54,8 +54,10 @@ On top of that, Logman ships with a **full-featured log viewer** you can access 
 
 ### Request Logging
 - **Log every incoming HTTP request** — disabled by default; flip one switch to capture all requests
+- **Log on demand** — call `logman_log_request()` (or `Logman::logRequest()`) anywhere to record a single request
 - **Dedicated log file** — written to `logman-requests-*.log` and browsable in the Log Viewer automatically
 - **Configurable payload** — include/exclude query, body, headers, and response status
+- **Filter from `.env`** — restrict by HTTP method, by URL path pattern, or by a substring in the URL
 - **Path exclusions** — skip assets, health checks, and third-party routes (Logman's own routes are always excluded)
 - **Secret-safe** — bodies, query params, and headers are masked using the same `hidden_fields` as notifications
 
@@ -361,7 +363,15 @@ Log every incoming HTTP request to a dedicated log file that shows up in the Log
     'log_response_body' => false,     // response body (masked; off by default)
 
     'middleware' => 'global',         // 'global' | 'web' | 'api' | ['web','api']
-    'methods' => [],                  // limit to specific methods, e.g. ['POST','PUT']; empty = all
+
+    // These three read from env as comma-separated lists (parsed into arrays):
+    //   LOGMAN_REQUEST_METHODS="POST,PUT,DELETE"     → limit methods; empty = all
+    //   LOGMAN_REQUEST_ONLY="api/*,checkout"         → path allowlist (* wildcards)
+    //   LOGMAN_REQUEST_ONLY_CONTAINING="checkout"    → URL substring allowlist
+    'methods' => [],
+    'only' => [],
+    'only_containing' => [],
+
     'body_ignore_methods' => ['GET', 'HEAD', 'OPTIONS'],
 
     'except' => ['telescope*', 'livewire*', '*.js', '*.css', /* ... */],
@@ -380,11 +390,49 @@ Log every incoming HTTP request to a dedicated log file that shows up in the Log
 | `request_logging.log_response_status` | `true` | Include the HTTP response status |
 | `request_logging.log_response_body` | `false` | Include the response body (masked; JSON decoded) |
 | `request_logging.middleware` | `'global'` | Where to attach: `'global'`, a group name, or a list of groups |
-| `request_logging.methods` | `[]` | Only log these methods (empty = all) |
+| `request_logging.methods` | `[]` | Only log these methods (empty = all) — env `LOGMAN_REQUEST_METHODS` |
+| `request_logging.only` | `[]` | Path allowlist — only log paths matching these patterns (`*` wildcards); env `LOGMAN_REQUEST_ONLY` |
+| `request_logging.only_containing` | `[]` | URL substring allowlist — only log URLs containing these strings; env `LOGMAN_REQUEST_ONLY_CONTAINING` |
 | `request_logging.except` | asset/vendor patterns | Skip paths matching these patterns (`*` wildcards) |
 | `request_logging.max_payload_length` | `8000` | Truncate oversized payloads |
 
 > Logman's own viewer routes are always excluded, so request logging never logs itself.
+
+**Filter which requests get logged, entirely from `.env`:**
+
+```dotenv
+LOGMAN_REQUEST_LOGGING=true
+
+# Only log these HTTP methods (empty = all methods)
+LOGMAN_REQUEST_METHODS="POST,PUT,DELETE"
+
+# Only log specific URLs by path pattern (supports * wildcards)
+LOGMAN_REQUEST_ONLY="api/orders/*,checkout"
+
+# ...or only log URLs that contain a given piece of text
+LOGMAN_REQUEST_ONLY_CONTAINING="checkout,?debug=1"
+```
+
+`only` and `only_containing` are **allowlists**: when either is set, a request is logged only if it matches at least one entry (the two are combined with OR). Leave both empty to log every request.
+
+#### Log a request on demand
+
+Want to log a single request from your own code — regardless of the config switches? Call the helper (or the facade) anywhere: it writes to the same `logman_requests` channel and **bypasses** the `enabled` flag and all skip/allowlist filters.
+
+```php
+// Logs the current request
+logman_log_request();
+
+// Log a specific request (and optionally its response)
+logman_log_request($request);
+logman_log_request($request, $response);
+
+// Or via the facade
+use MahmoudMhamed\Logman\Facades\Logman;
+
+Logman::logRequest();          // current request
+Logman::logRequest($request);  // a specific request
+```
 
 ---
 
@@ -423,6 +471,11 @@ try {
 
 // Send an info message to all enabled channels
 Logman::sendInfo('Deployment completed successfully');
+
+// Log the current HTTP request on demand (see "Request Logging" below).
+// Bypasses the enabled switch and skip/allowlist filters.
+logman_log_request();          // current request
+Logman::logRequest($request);  // or a specific request
 ```
 
 ### Ignoring Exceptions

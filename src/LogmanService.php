@@ -92,6 +92,32 @@ class LogmanService
     }
 
     /**
+     * Log an HTTP request on demand to the dedicated request-logging channel.
+     *
+     * Call from anywhere (controller, action, listener, ...) to record the
+     * current request — or a request/response you pass explicitly. This is an
+     * explicit, manual write: it bypasses the request_logging.enabled master
+     * switch and the skip/allowlist filters (the developer asked for it).
+     *
+     * @param  \Illuminate\Http\Request|null  $request  Defaults to the current request.
+     * @param  \Symfony\Component\HttpFoundation\Response|null  $response  Optional response to include.
+     */
+    public function logRequest($request = null, $response = null): void
+    {
+        try {
+            $request ??= request();
+
+            if (! $request instanceof \Illuminate\Http\Request) {
+                return;
+            }
+
+            \MahmoudMhamed\Logman\Support\RequestLogger::write($request, $response, respectFilters: false);
+        } catch (Throwable $e) {
+            // Silently fail — logging must never break the app.
+        }
+    }
+
+    /**
      * Register a custom channel driver.
      */
     public static function registerDriver(string $name, string $class): void
