@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use SplFileInfo;
+use Throwable;
 
 class LogManService
 {
@@ -20,6 +21,12 @@ class LogManService
 
     protected string $cachePrefix;
 
+    /** Files above this size are parsed on every request instead of being cached. */
+    protected int $cacheMaxFileSize;
+
+    /** Parsed entries take roughly this many times the file size in memory. */
+    protected const PARSE_MEMORY_FACTOR = 8;
+
     public function __construct()
     {
         $config = config('logman.viewer');
@@ -28,6 +35,7 @@ class LogManService
         $this->maxFileSize = $config['max_file_size'] ?? 50 * 1024 * 1024;
         $this->perPage = $config['per_page'] ?? 25;
         $this->cachePrefix = 'logman:';
+        $this->cacheMaxFileSize = $config['cache_max_file_size'] ?? 5 * 1024 * 1024;
     }
 
     // ─── File Operations ────────────────────────────────────────
@@ -125,7 +133,7 @@ class LogManService
             return $this->emptyResult($perPage, $page);
         }
 
-        if (File::size($path) > $this->maxFileSize) {
+        if ($this->isTooLarge($path)) {
             return ['entries' => new LengthAwarePaginator([], 0, $perPage), 'too_large' => true, 'level_counts' => [], 'has_multiple_dates' => false];
         }
 
@@ -289,13 +297,109 @@ class LogManService
         return false;
     }
 
+    /**
+     * True when the file can't be shown: above `max_file_size`, or parsing it
+     * would likely exhaust PHP's memory_limit (a fatal error, i.e. a bare 500).
+     */
+    protected function isTooLarge(string $path): bool
+    {
+        $size = (int) File::size($path);
+
+        if ($size > $this->maxFileSize) {
+            return true;
+        }
+
+        $limit = $this->memoryLimitBytes();
+
+        return $limit > 0 && memory_get_usage(true) + $size * self::PARSE_MEMORY_FACTOR > $limit;
+    }
+
+    protected function memoryLimitBytes(): int
+    {
+        $value = trim((string) ini_get('memory_limit'));
+        if ($value === '' || $value === '-1') {
+            return 0;
+        }
+
+        $bytes = (int) $value;
+
+        return match (strtolower(substr($value, -1))) {
+            'g' => $bytes * 1024 ** 3,
+            'm' => $bytes * 1024 ** 2,
+            'k' => $bytes * 1024,
+            default => $bytes,
+        };
+    }
+
+    /**
+     * Parsed entries, cached only for small files. Large files would produce a
+     * cache value bigger than many stores accept (e.g. the database store's
+     * MEDIUMTEXT column) — so they are parsed per request, and any cache
+     * failure falls back to parsing instead of breaking the page.
+     */
     protected function getCachedEntries(string $filename, string $path): array
     {
-        $mtime = File::lastModified($path);
-        $cacheKey = $this->cachePrefix.md5($filename.$mtime);
-
-        return Cache::remember($cacheKey, 300, function () use ($path) {
+        if (File::size($path) > $this->cacheMaxFileSize) {
             return $this->parseLogFile($path);
+        }
+
+        $cacheKey = $this->cachePrefix.md5($filename.File::lastModified($path));
+
+        return $this->rememberSafely($cacheKey, fn () => $this->parseLogFile($path));
+    }
+
+    protected function rememberSafely(string $key, callable $callback): mixed
+    {
+        try {
+            $cached = Cache::get($key);
+            if ($cached !== null) {
+                return $cached;
+            }
+        } catch (Throwable) {
+            // Unreadable cache — compute below.
+        }
+
+        $value = $callback();
+
+        try {
+            Cache::put($key, $value, 300);
+        } catch (Throwable) {
+            // Value too large / cache store down — still serve the result.
+        }
+
+        return $value;
+    }
+
+    /**
+     * Level counts per day for the dashboard. Streams the file and reads only
+     * entry header lines, so memory stays flat regardless of file size, and the
+     * cached value is a few bytes.
+     *
+     * @return array<string, array<string, int>> date (Y-m-d) => level => count
+     */
+    protected function getFileSummary(string $filename, string $path): array
+    {
+        $cacheKey = $this->cachePrefix.'summary:'.md5($filename.File::lastModified($path));
+
+        return $this->rememberSafely($cacheKey, function () use ($path) {
+            $summary = [];
+            $handle = @fopen($path, 'r');
+            if (! $handle) {
+                return [];
+            }
+
+            while (($line = fgets($handle)) !== false) {
+                if ($line === '' || $line[0] !== '['
+                    || ! preg_match('/^\[(\d{4}-\d{2}-\d{2})[T ][^\]]*\]\s+\w+\.(\w+):/', $line, $m)) {
+                    continue;
+                }
+                $level = strtolower($m[2]);
+                $summary[$m[1]][$level] = ($summary[$m[1]][$level] ?? 0) + 1;
+            }
+
+            fclose($handle);
+
+            return $summary;
         });
     }
 
@@ -304,7 +408,12 @@ class LogManService
         $path = $this->safePath($filename);
         if ($path && File::exists($path)) {
             $mtime = File::lastModified($path);
-            Cache::forget($this->cachePrefix.md5($filename.$mtime));
+            try {
+                Cache::forget($this->cachePrefix.md5($filename.$mtime));
+                Cache::forget($this->cachePrefix.'summary:'.md5($filename.$mtime));
+            } catch (Throwable) {
+                // Cache store unavailable — nothing to clear.
+            }
         }
     }
 
@@ -548,8 +657,13 @@ class LogManService
                 continue;
             }
 
-            $entries = $this->getCachedEntries($file['name'], $path);
-            $counts = $this->countLevels($entries);
+            $summary = $this->getFileSummary($file['name'], $path);
+            $counts = [];
+            foreach ($summary as $dayCounts) {
+                foreach ($dayCounts as $l => $n) {
+                    $counts[$l] = ($counts[$l] ?? 0) + $n;
+                }
+            }
 
             $perFileCounts[$file['name']] = [
                 'counts' => $counts,
@@ -565,17 +679,13 @@ class LogManService
             $totalEntries += array_sum($counts);
 
             // Today + yesterday stats in the same loop
-            foreach ($entries as $entry) {
-                $entryDate = substr($entry['date'], 0, 10);
-                $l = $entry['level'];
-
-                if ($entryDate === $today) {
-                    $todayCounts[$l] = ($todayCounts[$l] ?? 0) + 1;
-                    $todayTotal++;
-                } elseif ($entryDate === $yesterday) {
-                    $yesterdayCounts[$l] = ($yesterdayCounts[$l] ?? 0) + 1;
-                    $yesterdayTotal++;
-                }
+            foreach ($summary[$today] ?? [] as $l => $n) {
+                $todayCounts[$l] = ($todayCounts[$l] ?? 0) + $n;
+                $todayTotal += $n;
+            }
+            foreach ($summary[$yesterday] ?? [] as $l => $n) {
+                $yesterdayCounts[$l] = ($yesterdayCounts[$l] ?? 0) + $n;
+                $yesterdayTotal += $n;
             }
         }
 
@@ -825,7 +935,7 @@ class LogManService
     public function getGroupedEntries(string $filename): array
     {
         $path = $this->safePath($filename);
-        if (! $path || ! File::exists($path) || File::size($path) > $this->maxFileSize) {
+        if (! $path || ! File::exists($path) || $this->isTooLarge($path)) {
             return [];
         }
 
@@ -918,7 +1028,7 @@ class LogManService
     public function findEntryByHash(string $filename, string $hash): ?array
     {
         $path = $this->safePath($filename);
-        if (! $path || ! File::exists($path) || File::size($path) > $this->maxFileSize) {
+        if (! $path || ! File::exists($path) || $this->isTooLarge($path)) {
             return null;
         }
 

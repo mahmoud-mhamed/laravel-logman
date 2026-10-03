@@ -315,6 +315,11 @@ return [
         // Maximum file size to display (in bytes). Default: 50 MB
         'max_file_size' => 50 * 1024 * 1024,
 
+        // Files larger than this (in bytes) are parsed on each request instead
+        // of being cached — their parsed entries can exceed what the cache store
+        // accepts (e.g. the database store's MEDIUMTEXT column). Default: 5 MB
+        'cache_max_file_size' => 5 * 1024 * 1024,
+
         // Entries per page
         'per_page' => 25,
 
